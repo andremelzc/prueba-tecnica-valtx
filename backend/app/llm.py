@@ -227,22 +227,31 @@ def clasificar_intencion_llm(texto_normalizado: str, llm: Any = None) -> LLMClas
 # --- Resumen para casos con_humano -----------------------------------
 
 _SYSTEM_RESUMEN = """\
-Tu tarea es RESUMIR, no responder. A partir de la consulta de un cliente, escribe
-UNA sola frase (máximo 25 palabras), en tercera persona, que le sirva a una
-persona del equipo comercial para saber qué necesita o reclama el cliente.
+Tu tarea es REFORMULAR la consulta de un cliente como una nota para el equipo
+comercial. NUNCA respondas la pregunta ni des información; solo describe qué
+pide, pregunta o reclama el cliente.
 
-Prohibido: saludar, responder al cliente, dar instrucciones o pasos, usar listas,
-escribir la palabra "Resumen".
+Formato: UNA sola frase (máximo 25 palabras), en tercera persona, empezando por
+"El cliente ...". Sin saludos, sin listas, sin la palabra "Resumen".
 
 Ejemplos:
 Consulta: "quiero que me devuelvan toda la plata aunque ya usé el producto"
-Resumen: El cliente pide el reembolso total de un producto que ya usó, fuera de la política estándar.
-Consulta: "necesito que me hagan un descuento más grande que el de la tabla para una compra grande"
-Resumen: El cliente solicita un descuento mayor al de la política para una compra de gran volumen.\
+El cliente pide el reembolso total de un producto que ya usó, fuera de la política estándar.
+Consulta: "necesito un descuento más grande que el de la tabla para una compra grande"
+El cliente solicita un descuento mayor al de la política para una compra de gran volumen.
+Consulta: "¿ofrecen financiamiento para compras grandes?"
+El cliente pregunta si existe financiamiento para compras de gran volumen.
+Consulta: "el producto llegó dañado y ya venció el plazo de devolución"
+El cliente reporta un producto dañado y pide una devolución fuera de plazo.\
 """
 
 _RESUMEN_PREFIJO_RE = re.compile(r"^\s*(resumen|el resumen (es|sería))\s*[:\-]?\s*", re.IGNORECASE)
 _RESUMEN_CORTE_RE = re.compile(r"[\n\r]|\s\d+[.)]\s|\s-\s")
+# El modelo a veces RESPONDE al cliente en vez de resumir; lo detectamos.
+_RESUMEN_RESPONDIENDO_RE = re.compile(
+    r"^\s*(s[ií]|no|claro|por supuesto|efectivamente|puede[s]?|podr[ií]a[s]?|"
+    r"le\s+recomend|te\s+recomend|perm[ií]t)", re.IGNORECASE
+)
 
 
 def generar_resumen_con_humano(texto_normalizado: str, llm: Any = None) -> str:
@@ -266,7 +275,10 @@ def generar_resumen_con_humano(texto_normalizado: str, llm: Any = None) -> str:
     resumen = _RESUMEN_CORTE_RE.split(crudo, maxsplit=1)[0].strip().strip('"')
     if "." in resumen:
         resumen = resumen.split(".", 1)[0].strip() + "."
-    # Fallback: la consulta tal cual (recortada) si no salió nada útil.
-    if len(resumen) < 10:
-        resumen = texto_normalizado[:200].strip()
+
+    # Si no salió nada útil, o el modelo respondió al cliente en vez de resumir,
+    # usamos un resumen determinístico con la consulta.
+    if len(resumen) < 10 or _RESUMEN_RESPONDIENDO_RE.match(resumen):
+        consulta = texto_normalizado.strip().strip("¿?.!¡ ").strip()
+        resumen = f"El cliente consulta: «{consulta}»."
     return resumen[:280]

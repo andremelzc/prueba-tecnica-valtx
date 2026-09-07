@@ -1,0 +1,77 @@
+[
+  {
+    "id": "faq_estatica",
+    "texto": "¿Cuál es el plazo para devolver un producto?",
+    "canal": "chat",
+    "respuesta": {
+      "categoria": "faq_estatica",
+      "respuesta": "El plazo para devolver un producto es de 15 días calendario desde la recepción del mismo. (Fuente: Política de devoluciones y garantías)",
+      "fuente": "Política de devoluciones y garantías",
+      "confianza": 0.912,
+      "es_duplicado": false,
+      "metodo_clasificacion": "regla",
+      "razon": "keywords: plazo, devolver",
+      "resumen": null
+    }
+  },
+  {
+    "id": "dato_dinamico",
+    "texto": "¿Cuál es el precio actual del Producto Alfa?",
+    "canal": "correo",
+    "respuesta": {
+      "categoria": "dato_dinamico",
+      "respuesta": "Esta información (precio, stock, promoción) se gestiona en el sistema comercial y se actualiza frecuentemente. Te recomendamos verificarla ahí directamente.",
+      "fuente": null,
+      "confianza": 0.95,
+      "es_duplicado": false,
+      "metodo_clasificacion": "regla",
+      "razon": "keywords: precio",
+      "resumen": null
+    }
+  },
+  {
+    "id": "otra_area",
+    "texto": "¿Cuándo pagan los sueldos este mes?",
+    "canal": "chat",
+    "respuesta": {
+      "categoria": "otra_area",
+      "respuesta": "Esta consulta no corresponde al área comercial; contacta al área correspondiente para que puedan ayudarte.",
+      "fuente": null,
+      "confianza": 0.95,
+      "es_duplicado": false,
+      "metodo_clasificacion": "regla",
+      "razon": "keywords: sueldos",
+      "resumen": null
+    }
+  },
+  {
+    "id": "con_humano",
+    "texto": "Tengo una queja sobre la atención que recibí, ¿con quién hablo?",
+    "canal": "teléfono",
+    "respuesta": {
+      "categoria": "con_humano",
+      "respuesta": "Tu consulta necesita la revisión de una persona del equipo comercial. La derivamos para que la atiendan a la brevedad.",
+      "fuente": null,
+      "confianza": 0.95,
+      "es_duplicado": false,
+      "metodo_clasificacion": "regla",
+      "razon": "keywords: queja",
+      "resumen": "El usuario tiene una queja sobre la atención recibida y busca hablar con alguien sobre ello."
+    }
+  },
+  {
+    "id": "con_humano_rag",
+    "texto": "¿Puedo pagar en cuotas?",
+    "canal": "chat",
+    "respuesta": {
+      "categoria": "con_humano",
+      "respuesta": "Tu consulta necesita la revisión de una persona del equipo comercial. La derivamos para que la atiendan a la brevedad.",
+      "fuente": null,
+      "confianza": 0.857,
+      "es_duplicado": false,
+      "metodo_clasificacion": "rag_sin_fundamento",
+      "razon": "RAG: rag_sin_fundamento (mejor score 0.857)",
+      "resumen": "El cliente consulta: «puedo pagar en cuotas»."
+    }
+  }
+]
