@@ -34,13 +34,18 @@ CSV_DEFAULT = Path(__file__).resolve().parent.parent / "data" / "consultas_ejemp
 def main(csv_path: Path) -> None:
     usar_llm = os.getenv("SKIP_LLM") != "1"
     llm_fn = clasificar_intencion_llm if usar_llm else None
+    faq_fn = None
     if usar_llm:
-        from app.llm import cargar_llm
+        from app.llm import cargar_llm, get_llm
+        from app.rag import indexar_si_necesario, responder_faq
 
         print("Cargando LLM ...", flush=True)
         t0 = time.time()
         cargar_llm()
-        print(f"LLM cargado en {time.time() - t0:.1f}s\n", flush=True)
+        print(f"LLM cargado en {time.time() - t0:.1f}s", flush=True)
+        print("Indexando RAG ...", flush=True)
+        print(indexar_si_necesario(), "\n", flush=True)
+        faq_fn = lambda t: responder_faq(t, get_llm())  # noqa: E731
 
     cache = RecentQueryCache()
     with csv_path.open(encoding="utf-8-sig", newline="") as fh:
@@ -49,6 +54,8 @@ def main(csv_path: Path) -> None:
     conteo_cat: dict[str, int] = {}
     conteo_metodo: dict[str, int] = {}
     resueltos_llm = []
+    con_humano_por = {"regla/llm directo": 0, "rag_baja_confianza": 0, "rag_sin_fundamento": 0}
+    ejemplos_rag = []
 
     print(f"{'id':<6}{'categoría final':<16}{'método':<20}{'conf':<7}consulta")
     print("-" * 110)
@@ -57,13 +64,23 @@ def main(csv_path: Path) -> None:
         texto = row["consulta"]
         regla = clasificar_por_reglas(normalizar(texto))
 
-        resp = procesar_consulta(texto, row["canal"], cache=cache, llm_fn=llm_fn)
+        resp = procesar_consulta(texto, row["canal"], cache=cache, llm_fn=llm_fn, faq_fn=faq_fn)
         cat = resp.categoria.value
         conteo_cat[cat] = conteo_cat.get(cat, 0) + 1
         conteo_metodo[resp.metodo_clasificacion] = conteo_metodo.get(resp.metodo_clasificacion, 0) + 1
 
         if regla.categoria == AMBIGUO and resp.metodo_clasificacion != "duplicado":
             resueltos_llm.append((row["id"], texto, cat, resp.metodo_clasificacion, resp.razon))
+
+        if cat == "con_humano":
+            if resp.metodo_clasificacion == "rag_baja_confianza":
+                con_humano_por["rag_baja_confianza"] += 1
+            elif resp.metodo_clasificacion == "rag_sin_fundamento":
+                con_humano_por["rag_sin_fundamento"] += 1
+            else:
+                con_humano_por["regla/llm directo"] += 1
+        if cat == "faq_estatica" and resp.metodo_clasificacion in ("regla", "llm"):
+            ejemplos_rag.append((row["id"], texto, resp.respuesta, resp.fuente, resp.confianza))
 
         print(f"{row['id']:<6}{cat:<16}{resp.metodo_clasificacion:<20}{resp.confianza:<7}{texto}")
 
@@ -79,10 +96,20 @@ def main(csv_path: Path) -> None:
     for m, n in sorted(conteo_metodo.items(), key=lambda kv: -kv[1]):
         print(f"  {m:<22} {n}")
 
-    print(f"\n== Casos que resolvió el LLM ({len(resueltos_llm)}) ==")
+    print("\n== con_humano: por qué llegaron ahí ==")
+    for k, n in con_humano_por.items():
+        print(f"  {k:<22} {n}")
+
+    print(f"\n== Casos que resolvió el LLM en la clasificación ({len(resueltos_llm)}) ==")
     for cid, texto, cat, metodo, razon in resueltos_llm:
         print(f"  {cid}  {cat:<14} [{metodo}]  {texto}")
         print(f"        razón: {razon}")
+
+    print(f"\n== Ejemplos de respuestas generadas por RAG ({len(ejemplos_rag)}) ==")
+    for cid, texto, respuesta, fuente, conf in ejemplos_rag[:6]:
+        print(f"  {cid} (score {conf}) — {texto}")
+        print(f"     fuente citada: {fuente}")
+        print(f"     respuesta: {respuesta}\n")
 
 
 if __name__ == "__main__":

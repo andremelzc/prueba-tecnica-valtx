@@ -70,10 +70,14 @@ DEDUP_THRESHOLD = float(os.getenv("DEDUP_THRESHOLD", "90"))
 DEDUP_MAX_ITEMS = int(os.getenv("DEDUP_MAX_ITEMS", "50"))
 DEDUP_TTL_SECONDS = int(os.getenv("DEDUP_TTL_SECONDS", "1800"))  # 30 min
 
-# RAG: score mínimo de similitud (coseno, 0-1) para fiarnos de un chunk.
-# Por debajo de esto no inventamos: la consulta cae a con_humano.
-RAG_SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.80"))
-RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+# RAG: score mínimo de similitud (coseno, 0-1) para pasar el chunk al LLM.
+# e5-small comprime mucho los scores (todo cae ~0.81-0.93), así que este umbral
+# solo descarta lo claramente irrelevante; el filtro fino es la compuerta SI/NO
+# del LLM sobre el contexto recuperado (ver rag.py).
+RAG_SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.84"))
+# 5 y no 3: algunas preguntas ("¿qué incluye el catálogo?") necesitan varias
+# filas de tabla en el contexto, y las filas puntúan por debajo del párrafo intro.
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
 
 
 # --- Respuestas fijas -----------------------------------------------------

@@ -123,7 +123,11 @@ Clasifica la consulta del usuario en EXACTAMENTE UNA de estas 4 categorías:
   reembolsos no estándar, cotización a medida, cambio de proveedor, "quiero
   hablar con alguien".
 
-Si dudas entre faq_estatica y con_humano, elige con_humano.
+Si la consulta PIDE INFORMACIÓN sobre productos, servicios, condiciones de
+compra, pagos, envíos o soporte —aunque no sepas si está documentada— elige
+faq_estatica: un filtro posterior valida si la respuesta está en la documentación
+y, si no, la deriva. Reserva con_humano para quejas, reclamos, negociaciones o
+pedidos EXPLÍCITOS de excepción o de hablar con una persona.
 Si dudas entre faq_estatica y dato_dinamico, elige dato_dinamico.
 
 Responde ÚNICAMENTE con un objeto JSON, sin texto adicional, con esta forma exacta:

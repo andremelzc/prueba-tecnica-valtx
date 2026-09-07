@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from app.config import LLM_MODEL_PATH
 from app.llm import cargar_llm
 from app.normalization import RecentQueryCache
+from app.rag import indexar_si_necesario
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("asistente")
@@ -33,6 +34,11 @@ async def lifespan(app: FastAPI):
         log.info("Cargando LLM local desde %s ...", LLM_MODEL_PATH)
         app.state.llm = cargar_llm()
         log.info("LLM cargado.")
+
+    # Indexado del documento de referencia (una sola vez; si Qdrant ya tiene
+    # datos, no reindexa).
+    info = indexar_si_necesario()
+    log.info("Índice RAG: %s", info)
 
     yield
 

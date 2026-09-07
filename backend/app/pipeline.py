@@ -1,14 +1,17 @@
 """Orquestación de una consulta de punta a punta (single-turn, sin memoria).
 
     normalizar -> dedup -> clasificar (reglas + LLM) -> respuesta según categoría
+                                                         └─ faq_estatica -> RAG
 
-Paso 2: la respuesta de `faq_estatica` y `con_humano` son placeholders; el RAG
-(Paso 3) y el resumen/pendiente (Paso 4) se enganchan después.
+Paso 3: `faq_estatica` se responde con el RAG (`faq_fn`). El RAG puede además
+deflectar a `con_humano` si el score es bajo (`rag_baja_confianza`) o si el LLM
+no puede fundamentar la respuesta en el contexto (`rag_sin_fundamento`).
+`con_humano` sigue siendo un placeholder hasta el Paso 4 (resumen + pendiente).
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, Optional
 
 from .classifier import LLMClassifier, clasificar
 from .config import (
@@ -20,7 +23,11 @@ from .config import (
     Categoria,
 )
 from .normalization import RecentQueryCache, normalizar
+from .rag import RespuestaRAG
 from .schemas import ConsultaResponse
+
+# Firma del responder RAG: recibe el texto normalizado y devuelve una RespuestaRAG.
+FaqResponder = Callable[[str], RespuestaRAG]
 
 
 def procesar_consulta(
@@ -29,6 +36,7 @@ def procesar_consulta(
     *,
     cache: RecentQueryCache,
     llm_fn: Optional[LLMClassifier] = None,
+    faq_fn: Optional[FaqResponder] = None,
 ) -> ConsultaResponse:
     texto_norm = normalizar(texto)
 
@@ -53,28 +61,55 @@ def procesar_consulta(
     else:
         categoria = clf.categoria
 
-    # 3. Respuesta según categoría.
-    fuente: Optional[str] = None
-    if categoria == Categoria.FAQ_ESTATICA:
-        respuesta = RESPUESTA_FAQ_PLACEHOLDER
-    elif categoria == Categoria.DATO_DINAMICO:
-        respuesta = MENSAJE_DATO_DINAMICO
-    elif categoria == Categoria.OTRA_AREA:
-        respuesta = MENSAJE_OTRA_AREA
-    else:  # CON_HUMANO
-        respuesta = RESPUESTA_CON_HUMANO_PLACEHOLDER
+    resp = _responder(categoria, texto_norm, metodo, confianza, razon, faq_fn)
 
-    resp = ConsultaResponse(
-        categoria=categoria,
-        respuesta=respuesta,
-        fuente=fuente,
-        confianza=confianza,
-        es_duplicado=False,
-        metodo_clasificacion=metodo,
-        razon=razon,
-    )
-
-    # 4. Registrar en el cache para la deduplicación de próximas consultas.
-    #    (El registro en SQLite se agrega en el Paso 4.)
+    # Registrar en el cache para deduplicar próximas consultas.
+    # (El registro en SQLite se agrega en el Paso 4.)
     cache.registrar(texto_norm, payload=resp.model_dump())
     return resp
+
+
+def _responder(
+    categoria: Categoria,
+    texto_norm: str,
+    metodo: str,
+    confianza: float,
+    razon: str,
+    faq_fn: Optional[FaqResponder],
+) -> ConsultaResponse:
+    if categoria == Categoria.FAQ_ESTATICA:
+        if faq_fn is None:  # dev sin RAG
+            return ConsultaResponse(
+                categoria=categoria, respuesta=RESPUESTA_FAQ_PLACEHOLDER, fuente=None,
+                confianza=confianza, metodo_clasificacion=metodo, razon=razon,
+            )
+        rag = faq_fn(texto_norm)
+        if rag.categoria == Categoria.FAQ_ESTATICA:
+            return ConsultaResponse(
+                categoria=Categoria.FAQ_ESTATICA, respuesta=rag.respuesta, fuente=rag.fuente,
+                confianza=rag.confianza, metodo_clasificacion=metodo, razon=razon,
+            )
+        # el RAG deflectó a con_humano (baja confianza / sin fundamento)
+        return ConsultaResponse(
+            categoria=Categoria.CON_HUMANO, respuesta=rag.respuesta, fuente=None,
+            confianza=rag.confianza, metodo_clasificacion=rag.metodo,
+            razon=f"RAG: {rag.metodo} (mejor score {rag.confianza})",
+        )
+
+    if categoria == Categoria.DATO_DINAMICO:
+        return ConsultaResponse(
+            categoria=categoria, respuesta=MENSAJE_DATO_DINAMICO, fuente=None,
+            confianza=confianza, metodo_clasificacion=metodo, razon=razon,
+        )
+
+    if categoria == Categoria.OTRA_AREA:
+        return ConsultaResponse(
+            categoria=categoria, respuesta=MENSAJE_OTRA_AREA, fuente=None,
+            confianza=confianza, metodo_clasificacion=metodo, razon=razon,
+        )
+
+    # CON_HUMANO
+    return ConsultaResponse(
+        categoria=Categoria.CON_HUMANO, respuesta=RESPUESTA_CON_HUMANO_PLACEHOLDER, fuente=None,
+        confianza=confianza, metodo_clasificacion=metodo, razon=razon,
+    )

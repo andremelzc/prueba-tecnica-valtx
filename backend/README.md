@@ -51,17 +51,21 @@ backend/
 │   ├── rules.py            # reglas por keyword, una lista de patrones por categoría
 │   ├── classifier.py       # reglas (scoring + margen) + fallback al LLM
 │   ├── llm.py              # carga del GGUF (singleton) + clasificación de intención por LLM
-│   └── pipeline.py         # orquestación: normalizar → dedup → clasificar → respuesta
+│   ├── indexing.py         # .docx -> chunks (párrafos + filas de tabla legibles)
+│   ├── rag.py              # embeddings e5 + Qdrant local + búsqueda + generación
+│   └── pipeline.py         # orquestación: normalizar → dedup → clasificar → RAG/respuesta
 ├── scripts/
 │   ├── descargar_modelo.py  # baja el GGUF a models/ (una vez)
 │   ├── eval_clasificador.py # CSV por las reglas (sin LLM)
-│   ├── eval_pipeline.py     # CSV por el pipeline completo (reglas + LLM)
+│   ├── eval_pipeline.py     # CSV por el pipeline completo (reglas + LLM + RAG)
 │   ├── test_parte1.py       # pruebas normalización + reglas
-│   └── test_parte2.py       # pruebas fallback LLM (con LLM falso, sin modelo)
+│   ├── test_parte2.py       # pruebas fallback LLM (con LLM falso, sin modelo)
+│   └── test_parte3.py       # pruebas indexing + umbral/compuerta RAG (sin modelo)
 ├── models/                 # Phi-3-mini-4k-instruct-q4.gguf (no versionado)
 └── data/
     ├── consultas_ejemplo.csv
-    └── documentos_referencia.docx
+    ├── documentos_referencia.docx
+    └── qdrant/             # índice vectorial local (no versionado)
 ```
 
 ## Cómo correr
@@ -79,34 +83,57 @@ uvicorn main:app --reload            # levanta la app (carga el LLM al iniciar)
 
 ## Resultados sobre la muestra de 80 consultas (pipeline completo)
 
-`python -m scripts.eval_pipeline` — reglas + fallback real a Phi-3-mini:
+`python -m scripts.eval_pipeline` — reglas + Phi-3-mini + RAG:
 
 | categoría final | n  |
 |-----------------|----|
-| faq_estatica    | 37 |
-| con_humano      | 23 |
+| faq_estatica    | 35 |
+| con_humano      | 25 |
 | dato_dinamico   | 11 |
 | otra_area       | 9  |
 
-| método      | n  |
-|-------------|----|
-| `regla`     | 67 (84 %) |
-| `llm`       | 13 (16 %) |
-| `llm_fallback_error` | 0 |
+| método de clasificación | n  |
+|-------------------------|----|
+| `regla`                 | 65 |
+| `llm`                   | 9  |
+| `rag_sin_fundamento`    | 4  |
+| `rag_baja_confianza`    | 2  |
+| `llm_fallback_error`    | 0  |
 
-- El split reglas/LLM (~84/16) coincide con la estimación hecha a mano en el Paso 1.
-- El LLM tiende a mandar lo vago a `con_humano` (11 de 13), por la instrucción
-  "si dudas, escala". Eso sube `con_humano` de ~12 (solo reglas) a 23. Varias de
-  esas (cuotas, soporte, certificaciones, envíos) podrían ir a `faq_estatica` y
-  dejar que el umbral de confianza del RAG (Paso 3) decida — el resultado final
-  para el usuario es equivalente.
-- **0 errores de parseo:** Phi-3-mini por sí solo NO respeta el esquema JSON
-  (inventa `{"intent": ..., "command": ...}`); se resuelve con una **gramática
-  GBNF** que obliga la forma `{"categoria": <una de 4>, "razon": "..."}`. El
-  camino de error (`con_humano` + `llm_fallback_error`) sigue cubierto por
-  `test_parte2` con un LLM falso.
-- Costo: ~5-7 s por llamada al LLM en CPU; las 80 consultas en ~80 s (solo 13
-  tocan el LLM, el resto son reglas ~instantáneas).
+**Cómo llegaron las 25 a `con_humano`:**
+
+| vía | n | ejemplos |
+|-----|---|----------|
+| regla / LLM directo (queja, excepción, negociación, vago) | 19 | reembolso usado, negociar pago, "hablar con alguien" |
+| `rag_baja_confianza` (score < umbral, sin llamar al LLM)  | 2  | certificaciones de calidad, confidencialidad de datos |
+| `rag_sin_fundamento` (RAG buscó, el doc no lo cubre)      | 4  | pagar en cuotas, soporte post-venta, envíos a provincia, SLA |
+
+- **Pasos 9-10 cumplidos:** las preguntas de info que el doc no cubre (cuotas,
+  soporte, envíos...) ya no las manda el LLM directo a `con_humano`; pasan por
+  `faq_estatica` → RAG y el filtro de confianza las deriva por similitud real.
+- **Phi-3-mini clasifica: 0 errores de parseo** gracias a la gramática GBNF.
+- Costo: clasificación ~5-7 s; cada `faq_estatica` hace 2 llamadas (compuerta +
+  generación) → ~60-90 s en CPU. Las 80 en ~13 min (con GPU o modelo más chico, <1 min).
+
+### Ejemplos de respuestas RAG
+
+La fuente va en el campo `fuente` de la respuesta (no siempre dentro del texto:
+Phi-3-mini no añade el "(Fuente: …)" de forma fiable).
+
+> **¿Cuál es el plazo para devolver un producto?**  · score 0.91 · fuente: *Política de devoluciones y garantías*
+> "El plazo para devolver un producto es de 15 días calendario desde la recepción del mismo."
+
+> **¿Puedo cancelar una solicitud ya enviada?**  · score 0.91 · fuente: *Preguntas frecuentes*
+> "Sí, puedes cancelar una solicitud ya enviada antes de que haya sido aprobada.
+> Para hacerlo, debes acceder al portal interno y proceder con los pasos necesarios…"
+
+> **¿El Producto Alfa viene con garantía extendida?**  · score 0.86 · fuente: *Catálogo de productos*
+> "No, el Producto Alfa (COD-ALF) no viene con garantía extendida. La garantía
+> estándar es de 12 meses y cubre defectos de fábrica durante ese período."
+
+Limitaciones observadas: Phi-3-mini a veces ignora el "sin listas" y responde con
+pasos numerados (contenido correcto, formato no ideal), y algún caso límite de
+"tiempo" (entrega vs. SLA) queda inconsistente. Ambos mejoran con un modelo mayor.
 
 ## Supuestos y decisiones
 
@@ -134,12 +161,35 @@ uvicorn main:app --reload            # levanta la app (carga el LLM al iniciar)
 - **`dato_dinamico` nunca pasa por el LLM.** Responde siempre con un mensaje fijo
   que deriva al sistema comercial.
 
+### RAG (Parte 3)
+
+- **Chunking:** un chunk por ítem de párrafo + uno por fila de tabla (convertida
+  a frase legible) + un chunk-resumen por tabla. El resumen es necesario para
+  preguntas que necesitan todas las filas juntas ("¿qué incluye el catálogo?").
+- **e5-small comprime los scores de similitud** a un rango muy estrecho
+  (~0.81–0.93 para todo), así que un único umbral no separa bien "está en el doc"
+  de "no está". Filtro en **dos etapas**: (1) umbral de score (descarta lo
+  claramente irrelevante) y (2) **compuerta SÍ/NO del LLM** sobre el contexto
+  recuperado (con gramática), + un backstop por regex sobre la 1ª frase de la
+  respuesta ("no se menciona en el contexto..."). Mejora natural: e5-base/large o
+  un reranker cross-encoder.
+- **Grounding:** el prompt de generación pide responder solo con el contexto; si
+  el LLM no puede, cae a `con_humano` (`rag_sin_fundamento`). Con score bajo ni
+  siquiera se llama al LLM (`rag_baja_confianza`).
+- **Ajuste al clasificador (pasos 9-10):** las preguntas de *información* sobre
+  producto/servicio/condiciones (cuotas, soporte, envíos, certificaciones) ahora
+  van a `faq_estatica` → RAG, y el filtro de confianza las deriva a `con_humano`
+  "por el camino correcto" (similitud real, no adivinanza del LLM). Las quejas /
+  excepciones / negociaciones siguen yendo directo a `con_humano` (keywords fuertes).
+
 ### Deliberadamente NO construido
 
 - **Corrección ortográfica dedicada.** Los typos ("kiero saber komo debuelvo") no
   matchean reglas y caen al LLM del fallback, que los tolera. Hacer fuzzy-match de
   tokens contra las keywords metía falsos positivos por poco beneficio dado el
   volumen.
+- **Reranker / embedding grande.** Con e5-small + Phi-3-mini el filtro de 2 etapas
+  alcanza para la demo; un cross-encoder o e5-large afinaría la precisión del RAG.
 
 ## Estado / pendientes
 
@@ -147,5 +197,7 @@ uvicorn main:app --reload            # levanta la app (carga el LLM al iniciar)
 - [x] **Parte 2** — LLM local (llama-cpp, carga única) + fallback de clasificación
       con salida JSON y manejo de errores; respuestas fijas de `dato_dinamico` y
       `otra_area`; placeholders para `faq_estatica` (RAG) y `con_humano` (resumen)
-- [ ] Parte 3 — RAG (indexado del `.docx` en Qdrant + embeddings e5)
+- [x] **Parte 3** — RAG: indexado del `.docx` en Qdrant local + embeddings e5;
+      búsqueda top-5 + filtro de confianza en 2 etapas; generación fundamentada
+      con cita de fuente; ajuste del clasificador (info → RAG, quejas → humano)
 - [ ] Parte 4 — endpoint `POST /consulta` + registro en SQLite + CORS + resumen `con_humano`

@@ -147,5 +147,20 @@ REGLAS: dict[Categoria, list[Regla]] = {
         _r(r"\bque\s+informacion\b.*\bsolicitud\b", 1.5),
         _r(r"\bque\s+productos\s+incluye\s+el\s+catalogo\b", 2.0),
         _r(r"\bque\s+necesito\s+para\s+(hacer\s+una\s+)?(devolucion|devolver)\b", 1.5),
+        # Preguntas de INFORMACIÓN sobre producto/servicio/condiciones. Aunque el
+        # dato no esté en el documento, entran por el RAG: el umbral de confianza
+        # (Paso 3) las deriva a con_humano "por el camino correcto" (similitud
+        # real), no porque el LLM adivine que son quejas.
+        _r(r"\bpagar\s+en\s+cuotas\b", 1.3),
+        _r(r"\ben\s+cuotas\b", 1.3),
+        _r(r"\b(formas?|medios?|metodos?|opciones)\s+de\s+pago\b", 1.3),
+        _r(r"\bfinanciamiento\b", 1.3),
+        _r(r"\bsoporte\s+tecnico\b", 1.3),
+        _r(r"\bpost-?venta\b", 1.3),
+        _r(r"\bposventa\b", 1.3),
+        _r(r"\bcertificacion(es)?\b", 1.3),
+        _r(r"\benvi(o|os|an|ar)\b", 1.3),
+        _r(r"\ba\s+provincia(s)?\b", 1.3),
+        _r(r"\bgarantia\s+extendida\b", 1.3),
     ],
 }
