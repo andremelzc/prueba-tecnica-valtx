@@ -29,6 +29,7 @@ from .config import (
     Categoria,
 )
 from .indexing import cargar_chunks
+from .llm import chat_completion
 
 _EMB_DIM = 384  # e5-small
 
@@ -227,7 +228,8 @@ def _es_deflexion(texto: str) -> bool:
 
 def _contexto_suficiente(llm: Any, contexto: str, pregunta: str) -> bool:
     try:
-        out = llm.create_chat_completion(
+        salida = chat_completion(
+            llm,
             messages=[
                 {"role": "system", "content": _SYSTEM_GATE},
                 {"role": "user", "content": f"CONTEXTO:\n{contexto}\n\nPREGUNTA: {pregunta}"},
@@ -236,7 +238,7 @@ def _contexto_suficiente(llm: Any, contexto: str, pregunta: str) -> bool:
             max_tokens=4,
             grammar=_get_gate_grammar(),
         )
-        return (out["choices"][0]["message"]["content"] or "").strip().upper().startswith("SI")
+        return salida.strip().upper().startswith("SI")
     except Exception:
         return False
 
@@ -278,7 +280,8 @@ def responder_faq(texto_consulta: str, llm: Any) -> RespuestaRAG:
 
     # 7b. Generación fundamentada en los chunks recuperados.
     try:
-        out = llm.create_chat_completion(
+        salida = chat_completion(
+            llm,
             messages=[
                 {"role": "system", "content": _SYSTEM_RAG},
                 {"role": "user", "content": f"CONTEXTO:\n{contexto}\n\nPREGUNTA: {texto_consulta}"},
@@ -286,7 +289,7 @@ def responder_faq(texto_consulta: str, llm: Any) -> RespuestaRAG:
             temperature=0.0,
             max_tokens=160,
         )
-        texto = _limpiar_respuesta((out["choices"][0]["message"]["content"] or "").strip())
+        texto = _limpiar_respuesta(salida.strip())
     except Exception as exc:
         return RespuestaRAG(
             categoria=Categoria.CON_HUMANO,

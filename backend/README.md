@@ -21,13 +21,16 @@ clasificación de intención
    ▼
 según categoría
    ├─ faq_estatica  → RAG sobre documentos_referencia (Qdrant + e5) → respuesta LLM citando fuente
-   │                  (si el score < umbral → con_humano, no se inventa)
+   │                  (si el score < umbral o el LLM no fundamenta → con_humano, no se inventa)
    ├─ dato_dinamico → mensaje fijo: ese dato vive en el sistema comercial
    ├─ otra_area     → mensaje fijo: derivación al área correspondiente
-   └─ con_humano    → resumen breve con el LLM, se guarda como pendiente
+   └─ con_humano    → mensaje fijo + resumen breve con el LLM para el revisor
    │
    ▼
-registro en SQLite  →  { categoria, respuesta, fuente, confianza }
+registro en SQLite (siempre, también duplicados)
+   │
+   ▼
+{ categoria, respuesta, fuente, confianza, metodo_clasificacion, es_duplicado }
 ```
 
 ## Categorías
@@ -43,28 +46,28 @@ registro en SQLite  →  { categoria, respuesta, fuente, confianza }
 
 ```
 backend/
-├── main.py                 # app FastAPI: lifespan carga el LLM 1 vez + /health
+├── main.py                 # app FastAPI: lifespan (LLM + índice + BD) · POST /consulta · /health
 ├── app/
 │   ├── config.py           # categorías, rutas, umbrales, mensajes fijos (overridable por env)
 │   ├── schemas.py          # modelos Pydantic de request/response
 │   ├── normalization.py    # normalizar / normalizar_match / RecentQueryCache (dedup)
 │   ├── rules.py            # reglas por keyword, una lista de patrones por categoría
 │   ├── classifier.py       # reglas (scoring + margen) + fallback al LLM
-│   ├── llm.py              # carga del GGUF (singleton) + clasificación de intención por LLM
+│   ├── llm.py              # carga del GGUF (singleton) + clasificación + resumen con_humano
 │   ├── indexing.py         # .docx -> chunks (párrafos + filas de tabla legibles)
 │   ├── rag.py              # embeddings e5 + Qdrant local + búsqueda + generación
-│   └── pipeline.py         # orquestación: normalizar → dedup → clasificar → RAG/respuesta
+│   ├── pipeline.py         # orquestación: normalizar → dedup → clasificar → RAG/respuesta
+│   └── db.py               # SQLite: una fila por consulta (también duplicados)
 ├── scripts/
 │   ├── descargar_modelo.py  # baja el GGUF a models/ (una vez)
 │   ├── eval_clasificador.py # CSV por las reglas (sin LLM)
 │   ├── eval_pipeline.py     # CSV por el pipeline completo (reglas + LLM + RAG)
-│   ├── test_parte1.py       # pruebas normalización + reglas
-│   ├── test_parte2.py       # pruebas fallback LLM (con LLM falso, sin modelo)
-│   └── test_parte3.py       # pruebas indexing + umbral/compuerta RAG (sin modelo)
+│   └── test_parte1..4.py    # pruebas por etapa (1-3 sin modelo; 4 con SKIP_LLM)
 ├── models/                 # Phi-3-mini-4k-instruct-q4.gguf (no versionado)
 └── data/
     ├── consultas_ejemplo.csv
     ├── documentos_referencia.docx
+    ├── consultas.db        # log SQLite (no versionado)
     └── qdrant/             # índice vectorial local (no versionado)
 ```
 
@@ -73,13 +76,47 @@ backend/
 ```bash
 # desde backend/, con el venv activado
 python -m scripts.descargar_modelo   # baja el modelo GGUF (~2.4 GB) a models/
-python -m scripts.test_parte1        # pruebas Parte 1
-python -m scripts.test_parte2        # pruebas Parte 2 (no necesita el modelo)
+python -m scripts.test_parte1        # pruebas por etapa (1-3 no necesitan el modelo)
+python -m scripts.test_parte4        # endpoint + SQLite (SKIP_LLM interno, sin modelo)
 python -m scripts.eval_pipeline      # CSV por el pipeline completo (necesita el modelo)
-SKIP_LLM=1 python -m scripts.eval_pipeline   # sin LLM (los ambiguos -> con_humano)
 
-uvicorn main:app --reload            # levanta la app (carga el LLM al iniciar)
+uvicorn main:app --reload            # levanta la app (carga LLM + índice + BD al iniciar)
+#   POST /consulta  {"texto": "...", "canal": "chat"}
+#   GET  /health
 ```
+
+> **Nota:** `QdrantClient(path=...)` bloquea la carpeta del índice: no puede haber
+> dos procesos usándola a la vez (p. ej. `uvicorn` + `eval_pipeline`). Para
+> concurrencia real habría que pasar a Qdrant server.
+
+## Endpoint
+
+`POST /consulta`
+
+```jsonc
+// request
+{ "texto": "¿Cuál es el plazo para devolver un producto?", "canal": "chat" }
+
+// response
+{
+  "categoria": "faq_estatica",
+  "respuesta": "El plazo para devolver un producto es de 15 días calendario desde la recepción del mismo. (Fuente: Política de devoluciones y garantías)",
+  "fuente": "Política de devoluciones y garantías",
+  "confianza": 0.912,
+  "es_duplicado": false,
+  "metodo_clasificacion": "regla",
+  "razon": "keywords: plazo, devolver",
+  "resumen": null            // solo se llena en categoría con_humano
+}
+```
+
+`main.py` **solo orquesta**: llama a `pipeline.procesar_consulta(...)` y luego a
+`db.registrar_consulta(...)`. Toda la lógica de ramas vive en `pipeline.py`.
+
+Cada llamada inserta una fila en `data/consultas.db` (tabla `consultas`:
+`id, timestamp, texto, canal, categoria, respuesta, fuente, confianza,
+metodo_clasificacion, es_duplicado, resumen`) — **también los duplicados**, que se
+resuelven con la respuesta cacheada sin volver a tocar el LLM/RAG.
 
 ## Resultados sobre la muestra de 80 consultas (pipeline completo)
 
@@ -117,8 +154,8 @@ uvicorn main:app --reload            # levanta la app (carga el LLM al iniciar)
 
 ### Ejemplos de respuestas RAG
 
-La fuente va en el campo `fuente` de la respuesta (no siempre dentro del texto:
-Phi-3-mini no añade el "(Fuente: …)" de forma fiable).
+La fuente va en el campo `fuente`; además se anexa "(Fuente: …)" al texto (el
+propio Phi-3-mini no la añade de forma fiable, así que la ponemos nosotros).
 
 > **¿Cuál es el plazo para devolver un producto?**  · score 0.91 · fuente: *Política de devoluciones y garantías*
 > "El plazo para devolver un producto es de 15 días calendario desde la recepción del mismo."
@@ -200,4 +237,6 @@ pasos numerados (contenido correcto, formato no ideal), y algún caso límite de
 - [x] **Parte 3** — RAG: indexado del `.docx` en Qdrant local + embeddings e5;
       búsqueda top-5 + filtro de confianza en 2 etapas; generación fundamentada
       con cita de fuente; ajuste del clasificador (info → RAG, quejas → humano)
-- [ ] Parte 4 — endpoint `POST /consulta` + registro en SQLite + CORS + resumen `con_humano`
+- [x] **Parte 4** — `POST /consulta` (solo orquesta `pipeline.procesar_consulta`),
+      CORS abierto, resumen `con_humano` con el LLM, y `app/db.py`: cada llamada
+      inserta una fila en SQLite (también los duplicados, sin recomputar)

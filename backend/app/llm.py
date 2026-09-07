@@ -70,6 +70,19 @@ def get_llm() -> Any:
     return _llm if _llm is not None else cargar_llm()
 
 
+# llama-cpp no es thread-safe para inferencia concurrente sobre el mismo
+# contexto; FastAPI corre los endpoints sync en un threadpool, así que
+# serializamos las generaciones.
+_infer_lock = threading.Lock()
+
+
+def chat_completion(llm: Any, **kwargs: Any) -> str:
+    """`create_chat_completion` serializado. Devuelve el texto de la respuesta."""
+    with _infer_lock:
+        out = llm.create_chat_completion(**kwargs)
+    return out["choices"][0]["message"]["content"] or ""
+
+
 def reset_llm() -> None:
     """Libera el singleton (para tests)."""
     global _llm
@@ -183,8 +196,7 @@ def clasificar_intencion_llm(texto_normalizado: str, llm: Any = None) -> LLMClas
         )
         if usar_gramatica:
             kwargs["grammar"] = _get_grammar()
-        out = llm.create_chat_completion(**kwargs)
-        contenido = out["choices"][0]["message"]["content"] or ""
+        contenido = chat_completion(llm, **kwargs)
     except Exception as exc:  # el LLM falló al generar
         return LLMClasificacion(
             categoria=Categoria.CON_HUMANO,
@@ -210,3 +222,51 @@ def clasificar_intencion_llm(texto_normalizado: str, llm: Any = None) -> LLMClas
         razon=razon or "(sin razón)",
         metodo="llm",
     )
+
+
+# --- Resumen para casos con_humano -----------------------------------
+
+_SYSTEM_RESUMEN = """\
+Tu tarea es RESUMIR, no responder. A partir de la consulta de un cliente, escribe
+UNA sola frase (máximo 25 palabras), en tercera persona, que le sirva a una
+persona del equipo comercial para saber qué necesita o reclama el cliente.
+
+Prohibido: saludar, responder al cliente, dar instrucciones o pasos, usar listas,
+escribir la palabra "Resumen".
+
+Ejemplos:
+Consulta: "quiero que me devuelvan toda la plata aunque ya usé el producto"
+Resumen: El cliente pide el reembolso total de un producto que ya usó, fuera de la política estándar.
+Consulta: "necesito que me hagan un descuento más grande que el de la tabla para una compra grande"
+Resumen: El cliente solicita un descuento mayor al de la política para una compra de gran volumen.\
+"""
+
+_RESUMEN_PREFIJO_RE = re.compile(r"^\s*(resumen|el resumen (es|sería))\s*[:\-]?\s*", re.IGNORECASE)
+_RESUMEN_CORTE_RE = re.compile(r"[\n\r]|\s\d+[.)]\s|\s-\s")
+
+
+def generar_resumen_con_humano(texto_normalizado: str, llm: Any = None) -> str:
+    """Resumen de UNA frase de la consulta, para quien la va a atender."""
+    llm = llm or get_llm()
+    try:
+        crudo = chat_completion(
+            llm,
+            messages=[
+                {"role": "system", "content": _SYSTEM_RESUMEN},
+                {"role": "user", "content": f'Consulta: "{texto_normalizado}"\nResumen:'},
+            ],
+            temperature=0.0,
+            max_tokens=60,
+        ).strip()
+    except Exception:
+        crudo = ""
+
+    # Nos quedamos con la 1ª línea / 1ª frase; cortamos si arranca a divagar.
+    crudo = _RESUMEN_PREFIJO_RE.sub("", crudo.strip())
+    resumen = _RESUMEN_CORTE_RE.split(crudo, maxsplit=1)[0].strip().strip('"')
+    if "." in resumen:
+        resumen = resumen.split(".", 1)[0].strip() + "."
+    # Fallback: la consulta tal cual (recortada) si no salió nada útil.
+    if len(resumen) < 10:
+        resumen = texto_normalizado[:200].strip()
+    return resumen[:280]

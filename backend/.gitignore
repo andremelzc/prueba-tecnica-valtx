@@ -9,7 +9,7 @@ __pycache__/
 .pytest_cache/
 
 # Datos generados en runtime
-data/consultas.db
+data/*.db
 data/qdrant/
 storage/
 

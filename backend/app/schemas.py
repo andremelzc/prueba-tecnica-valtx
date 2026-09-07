@@ -28,6 +28,14 @@ class ConsultaResponse(BaseModel):
     es_duplicado: bool = False
     metodo_clasificacion: str = Field(
         "regla",
-        description="Cómo se clasificó: 'regla', 'llm', 'llm_fallback_error' o 'duplicado'.",
+        description=(
+            "Cómo se clasificó: 'regla' o 'llm' ('llm_fallback_error' si el LLM "
+            "falló). Cuando el RAG cambia la categoría a con_humano: "
+            "'rag_baja_confianza' o 'rag_sin_fundamento'. En un duplicado se "
+            "conserva el método original y se marca `es_duplicado`."
+        ),
     )
     razon: str = Field("", description="Motivo de la clasificación (keywords o razón del LLM).")
+    resumen: Optional[str] = Field(
+        None, description="Resumen breve para el revisor (solo en categoría con_humano)."
+    )

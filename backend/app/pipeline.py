@@ -1,12 +1,13 @@
 """Orquestación de una consulta de punta a punta (single-turn, sin memoria).
 
     normalizar -> dedup -> clasificar (reglas + LLM) -> respuesta según categoría
-                                                         └─ faq_estatica -> RAG
+                                                         ├─ faq_estatica  -> RAG
+                                                         ├─ dato_dinamico -> mensaje fijo
+                                                         ├─ otra_area     -> mensaje fijo
+                                                         └─ con_humano    -> mensaje fijo + resumen (LLM)
 
-Paso 3: `faq_estatica` se responde con el RAG (`faq_fn`). El RAG puede además
-deflectar a `con_humano` si el score es bajo (`rag_baja_confianza`) o si el LLM
-no puede fundamentar la respuesta en el contexto (`rag_sin_fundamento`).
-`con_humano` sigue siendo un placeholder hasta el Paso 4 (resumen + pendiente).
+El endpoint (`main.py`) solo orquesta: llama a `procesar_consulta` y persiste el
+resultado. Toda la lógica de ramas vive acá.
 """
 
 from __future__ import annotations
@@ -16,9 +17,9 @@ from typing import Callable, Optional
 from .classifier import LLMClassifier, clasificar
 from .config import (
     AMBIGUO,
+    MENSAJE_CON_HUMANO,
     MENSAJE_DATO_DINAMICO,
     MENSAJE_OTRA_AREA,
-    RESPUESTA_CON_HUMANO_PLACEHOLDER,
     RESPUESTA_FAQ_PLACEHOLDER,
     Categoria,
 )
@@ -26,8 +27,10 @@ from .normalization import RecentQueryCache, normalizar
 from .rag import RespuestaRAG
 from .schemas import ConsultaResponse
 
-# Firma del responder RAG: recibe el texto normalizado y devuelve una RespuestaRAG.
+# faq_fn: recibe el texto normalizado y devuelve una RespuestaRAG.
 FaqResponder = Callable[[str], RespuestaRAG]
+# resumen_fn: recibe el texto normalizado y devuelve un resumen para el revisor.
+ResumenFn = Callable[[str], str]
 
 
 def procesar_consulta(
@@ -37,10 +40,12 @@ def procesar_consulta(
     cache: RecentQueryCache,
     llm_fn: Optional[LLMClassifier] = None,
     faq_fn: Optional[FaqResponder] = None,
+    resumen_fn: Optional[ResumenFn] = None,
 ) -> ConsultaResponse:
     texto_norm = normalizar(texto)
 
-    # 1. ¿Casi-duplicado de una consulta reciente? -> devolver respuesta cacheada.
+    # 1. ¿Casi-duplicado de una consulta reciente? -> respuesta cacheada, sin
+    #    volver a clasificar ni llamar al LLM/RAG.
     dup = cache.buscar_duplicado(texto_norm)
     if dup is not None and dup.payload is not None:
         cacheada = ConsultaResponse(**dup.payload)
@@ -49,22 +54,24 @@ def procesar_consulta(
 
     # 2. Clasificar: reglas y, si es ambiguo, fallback al LLM.
     clf = clasificar(texto_norm, llm_fn=llm_fn)
-    metodo = clf.metodo
-    confianza = clf.confianza
-    razon = clf.razon
+    metodo, confianza, razon = clf.metodo, clf.confianza, clf.razon
     if clf.categoria == AMBIGUO:
         # Sin llm_fn (solo en desarrollo con SKIP_LLM): no hay certeza -> escalar.
         categoria: Categoria = Categoria.CON_HUMANO
-        metodo = "sin_llm_fallback"
-        confianza = 0.30
+        metodo, confianza = "sin_llm_fallback", 0.30
         razon = "reglas ambiguas y LLM deshabilitado"
     else:
         categoria = clf.categoria
 
+    # 3. Rama según categoría.
     resp = _responder(categoria, texto_norm, metodo, confianza, razon, faq_fn)
 
-    # Registrar en el cache para deduplicar próximas consultas.
-    # (El registro en SQLite se agrega en el Paso 4.)
+    # 4. Para cualquier con_humano (regla directa, ambiguo, o deflexión del RAG):
+    #    resumen breve para quien lo revise.
+    if resp.categoria == Categoria.CON_HUMANO and resumen_fn is not None:
+        resp.resumen = resumen_fn(texto_norm)
+
+    # 5. Guardar en el cache para deduplicar próximas consultas (con su resumen).
     cache.registrar(texto_norm, payload=resp.model_dump())
     return resp
 
@@ -85,13 +92,16 @@ def _responder(
             )
         rag = faq_fn(texto_norm)
         if rag.categoria == Categoria.FAQ_ESTATICA:
+            # La clasificación (regla/llm) se mantiene; el RAG solo generó la
+            # respuesta. Los rag_* aparecen únicamente cuando el RAG cambia la
+            # categoría (deflexión a con_humano).
             return ConsultaResponse(
                 categoria=Categoria.FAQ_ESTATICA, respuesta=rag.respuesta, fuente=rag.fuente,
                 confianza=rag.confianza, metodo_clasificacion=metodo, razon=razon,
             )
         # el RAG deflectó a con_humano (baja confianza / sin fundamento)
         return ConsultaResponse(
-            categoria=Categoria.CON_HUMANO, respuesta=rag.respuesta, fuente=None,
+            categoria=Categoria.CON_HUMANO, respuesta=MENSAJE_CON_HUMANO, fuente=None,
             confianza=rag.confianza, metodo_clasificacion=rag.metodo,
             razon=f"RAG: {rag.metodo} (mejor score {rag.confianza})",
         )
@@ -108,8 +118,8 @@ def _responder(
             confianza=confianza, metodo_clasificacion=metodo, razon=razon,
         )
 
-    # CON_HUMANO
+    # CON_HUMANO (por regla directa o fallback del LLM)
     return ConsultaResponse(
-        categoria=Categoria.CON_HUMANO, respuesta=RESPUESTA_CON_HUMANO_PLACEHOLDER, fuente=None,
+        categoria=Categoria.CON_HUMANO, respuesta=MENSAJE_CON_HUMANO, fuente=None,
         confianza=confianza, metodo_clasificacion=metodo, razon=razon,
     )
