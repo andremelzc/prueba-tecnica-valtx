@@ -1,0 +1,21 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Datos generados en runtime
+data/consultas.db
+data/qdrant/
+storage/
+
+# Modelos locales (GGUF, pesos) — se descargan aparte
+models/
+*.gguf
+
+# Config local
+.env

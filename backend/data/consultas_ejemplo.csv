@@ -1,0 +1,81 @@
+﻿id;fecha;canal;consulta
+C001;11/02/2026;correo;¿Cómo solicito un producto del catálogo?
+C002;13/02/2026;chat;¿Cuáles son los pasos para pedir un servicio nuevo?
+C003;18/02/2026;formulario;¿Dónde encuentro el formulario de solicitud?
+C004;20/02/2026;correo;¿Qué información debo incluir en una solicitud?
+C005;25/02/2026;chat;¿Puedo cancelar una solicitud ya enviada?
+C006;2/03/2026;correo;¿Cuál es el plazo para devolver un producto?
+C007;4/03/2026;teléfono;¿Qué necesito para hacer una devolución?
+C008;6/03/2026;chat;¿Cómo funciona la garantía de los productos?
+C009;9/03/2026;correo;¿Qué descuento aplica para pedidos de 60 unidades?
+C010;11/03/2026;chat;¿Y para un pedido de 120 unidades cuánto de descuento hay?
+C011;13/03/2026;formulario;¿Qué productos incluye el catálogo?
+C012;17/03/2026;correo;¿Puedo modificar mi solicitud antes de que la aprueben?
+C013;19/03/2026;chat;¿A qué se refiere el código COD-ALF?
+C014;23/03/2026;correo;¿La garantía cubre defectos de fábrica?
+C015;25/03/2026;teléfono;¿Necesito el número de solicitud para devolver?
+C016;27/03/2026;chat;¿Cómo pido el Servicio Gamma?
+C017;1/04/2026;correo;¿El empaque original es obligatorio para la devolución?
+C018;3/04/2026;formulario;¿Desde cuándo cuentan los 15 días de devolución?
+C019;7/04/2026;chat;¿Qué pasos sigo para solicitar el Producto Beta?
+C020;9/04/2026;correo;¿Hay algún descuento por volumen?
+C021;14/04/2026;chat;¿Puedo pedir varios productos en una sola solicitud?
+C022;16/04/2026;correo;¿Cuánto dura la garantía?
+C023;18/04/2026;correo;Necesito un descuento mayor al de la tabla, ¿pueden hacer una excepción?
+C024;21/04/2026;teléfono;Tengo una queja sobre la atención que recibí, ¿con quién hablo?
+C025;23/04/2026;correo;Quiero negociar las condiciones de pago para mi área.
+C026;25/04/2026;chat;Un producto llegó dañado y ya pasó el plazo de devolución, ¿qué hacen?
+C027;28/04/2026;correo;Necesito aprobar una compra urgente fuera del proceso normal.
+C028;2/05/2026;teléfono;Requiero una cotización a medida para un proyecto grande.
+C029;5/05/2026;correo;Mi caso es especial, ¿pueden revisarlo manualmente?
+C030;7/05/2026;chat;Quisiera proponer trabajar con un nuevo proveedor, ¿a quién contacto?
+C031;9/05/2026;correo;El producto que recibí no es lo que esperaba, quiero reclamar.
+C032;12/05/2026;teléfono;¿Pueden hacerme una excepción con el plazo de entrega?
+C033;14/05/2026;chat;¿Cuál es el precio actual del Producto Alfa?
+C034;16/05/2026;correo;¿Hay stock disponible del Producto Beta hoy?
+C035;19/05/2026;chat;¿Qué promoción está vigente este mes?
+C036;21/05/2026;correo;¿Sigue vigente el descuento de fin de año?
+C037;23/05/2026;teléfono;¿Quién es el responsable de compras actualmente?
+C038;26/05/2026;chat;¿Cuál es el tipo de cambio que usan hoy para cotizar?
+C039;28/05/2026;correo;¿Cuándo llega el próximo lote del Producto Gamma?
+C040;1/06/2026;chat;¿El precio de la lista de enero sigue igual?
+C041;3/06/2026;formulario;¿Cuál es la fecha límite para pedidos de este trimestre?
+C042;5/06/2026;correo;¿Cuánto cuesta ahora el Servicio Gamma con la promo?
+C043;8/06/2026;chat;¿Cómo reseteo mi contraseña del correo?
+C044;10/06/2026;correo;¿Cuándo pagan los sueldos este mes?
+C045;12/06/2026;teléfono;Se me malogró la laptop, ¿a quién reporto?
+C046;15/06/2026;chat;¿Cómo solicito mis vacaciones?
+C047;17/06/2026;correo;¿Dónde queda la oficina de recursos humanos?
+C048;19/06/2026;chat;Necesito acceso al sistema de facturación, ¿cómo lo pido?
+C049;22/06/2026;correo;¿Tienen un comedor en la oficina?
+C050;24/06/2026;chat;Hola, tengo una duda.
+C051;26/06/2026;correo;¿Me pueden ayudar con lo de ayer?
+C052;29/06/2026;chat;No entiendo el proceso.
+C053;1/07/2026;teléfono;¿Eso se puede?
+C054;3/07/2026;chat;Quiero información.
+C055;6/07/2026;correo;¿Cuánto cuesta?
+C056;8/07/2026;chat;¿Y ahora qué hago?
+C057;10/07/2026;correo;¿Cuál es el tiempo de atención (SLA) de una solicitud?
+C058;13/07/2026;chat;¿Cuántos días demora la entrega de un producto?
+C059;15/07/2026;correo;¿Puedo pagar en cuotas?
+C060;17/07/2026;chat;¿Ofrecen soporte técnico después de la compra?
+C061;20/07/2026;correo;¿Tienen certificaciones de calidad?
+C062;22/07/2026;chat;¿Cuál es la política de confidencialidad de datos?
+C063;24/07/2026;formulario;¿Hacen envíos a provincia?
+C064;27/07/2026;chat;¿Cómo pido un producto?
+C065;29/07/2026;correo;¿Cuánto tiempo tengo para devolver algo?
+C066;31/07/2026;chat;¿Cómo hago una devolución?
+C067;3/08/2026;correo;¿Cuánto dura la garantía de los productos?
+C068;5/08/2026;chat;¿Dónde está el formulario para solicitar?
+C069;7/08/2026;chat;kiero saber komo debuelvo un producto porfa
+C070;10/08/2026;correo;COMO SOLICITO UN SERVICIO???
+C071;12/08/2026;chat;plazo devolucion?? urgente
+C072;14/08/2026;formulario;hola necesito el formularioo de solicitud grcs
+C073;17/08/2026;chat;garantia cuanto es
+C074;19/08/2026;correo;descuento x 200 unidades??
+C075;21/08/2026;chat;¿El Producto Alfa viene con garantía extendida?
+C076;24/08/2026;correo;Quiero un reembolso completo aunque usé el producto.
+C077;26/08/2026;chat;¿Cuál es el mejor producto para mi caso?
+C078;28/08/2026;correo;¿Cuánto stock queda del Alfa esta semana?
+C079;31/08/2026;chat;¿Cómo solicito un producto del catalogo?
+C080;2/09/2026;teléfono;Necesito hablar con alguien, es complicado de explicar por chat.
