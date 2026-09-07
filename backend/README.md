@@ -43,27 +43,70 @@ registro en SQLite  →  { categoria, respuesta, fuente, confianza }
 
 ```
 backend/
+├── main.py                 # app FastAPI: lifespan carga el LLM 1 vez + /health
 ├── app/
-│   ├── config.py          # categorías, rutas, umbrales (todo overridable por env)
+│   ├── config.py           # categorías, rutas, umbrales, mensajes fijos (overridable por env)
 │   ├── schemas.py          # modelos Pydantic de request/response
 │   ├── normalization.py    # normalizar / normalizar_match / RecentQueryCache (dedup)
 │   ├── rules.py            # reglas por keyword, una lista de patrones por categoría
-│   └── classifier.py       # reglas + (siguiente paso) fallback al LLM
+│   ├── classifier.py       # reglas (scoring + margen) + fallback al LLM
+│   ├── llm.py              # carga del GGUF (singleton) + clasificación de intención por LLM
+│   └── pipeline.py         # orquestación: normalizar → dedup → clasificar → respuesta
 ├── scripts/
-│   ├── eval_clasificador.py # pasa data/consultas_ejemplo.csv por las reglas y tabula
-│   └── test_parte1.py       # pruebas rápidas sin dependencias
+│   ├── descargar_modelo.py  # baja el GGUF a models/ (una vez)
+│   ├── eval_clasificador.py # CSV por las reglas (sin LLM)
+│   ├── eval_pipeline.py     # CSV por el pipeline completo (reglas + LLM)
+│   ├── test_parte1.py       # pruebas normalización + reglas
+│   └── test_parte2.py       # pruebas fallback LLM (con LLM falso, sin modelo)
+├── models/                 # Phi-3-mini-4k-instruct-q4.gguf (no versionado)
 └── data/
     ├── consultas_ejemplo.csv
-    └── documentos_referencia.pdf   # (ver nota abajo)
+    └── documentos_referencia.docx
 ```
 
 ## Cómo correr
 
 ```bash
 # desde backend/, con el venv activado
-python -m scripts.test_parte1        # pruebas
-python -m scripts.eval_clasificador  # ver clasificación sobre el CSV de ejemplo
+python -m scripts.descargar_modelo   # baja el modelo GGUF (~2.4 GB) a models/
+python -m scripts.test_parte1        # pruebas Parte 1
+python -m scripts.test_parte2        # pruebas Parte 2 (no necesita el modelo)
+python -m scripts.eval_pipeline      # CSV por el pipeline completo (necesita el modelo)
+SKIP_LLM=1 python -m scripts.eval_pipeline   # sin LLM (los ambiguos -> con_humano)
+
+uvicorn main:app --reload            # levanta la app (carga el LLM al iniciar)
 ```
+
+## Resultados sobre la muestra de 80 consultas (pipeline completo)
+
+`python -m scripts.eval_pipeline` — reglas + fallback real a Phi-3-mini:
+
+| categoría final | n  |
+|-----------------|----|
+| faq_estatica    | 37 |
+| con_humano      | 23 |
+| dato_dinamico   | 11 |
+| otra_area       | 9  |
+
+| método      | n  |
+|-------------|----|
+| `regla`     | 67 (84 %) |
+| `llm`       | 13 (16 %) |
+| `llm_fallback_error` | 0 |
+
+- El split reglas/LLM (~84/16) coincide con la estimación hecha a mano en el Paso 1.
+- El LLM tiende a mandar lo vago a `con_humano` (11 de 13), por la instrucción
+  "si dudas, escala". Eso sube `con_humano` de ~12 (solo reglas) a 23. Varias de
+  esas (cuotas, soporte, certificaciones, envíos) podrían ir a `faq_estatica` y
+  dejar que el umbral de confianza del RAG (Paso 3) decida — el resultado final
+  para el usuario es equivalente.
+- **0 errores de parseo:** Phi-3-mini por sí solo NO respeta el esquema JSON
+  (inventa `{"intent": ..., "command": ...}`); se resuelve con una **gramática
+  GBNF** que obliga la forma `{"categoria": <una de 4>, "razon": "..."}`. El
+  camino de error (`con_humano` + `llm_fallback_error`) sigue cubierto por
+  `test_parte2` con un LLM falso.
+- Costo: ~5-7 s por llamada al LLM en CPU; las 80 consultas en ~80 s (solo 13
+  tocan el LLM, el resto son reglas ~instantáneas).
 
 ## Supuestos y decisiones
 
@@ -83,6 +126,14 @@ python -m scripts.eval_clasificador  # ver clasificación sobre el CSV de ejempl
   contrato del enunciado es un mínimo; estos campos alimentan el panel de detalle
   del frontend (regla vs LLM, marca de duplicado).
 
+- **Fallback LLM solo para lo ambiguo.** Las reglas resuelven ~84 % de la muestra;
+  el LLM (Phi-3-mini) entra únicamente cuando no hay margen claro. Si el LLM
+  alucina una categoría o el JSON no parsea, se cae a `con_humano`
+  (`metodo_clasificacion="llm_fallback_error"`): ante la incertidumbre, escalar de
+  más es más barato que responder mal.
+- **`dato_dinamico` nunca pasa por el LLM.** Responde siempre con un mensaje fijo
+  que deriva al sistema comercial.
+
 ### Deliberadamente NO construido
 
 - **Corrección ortográfica dedicada.** Los typos ("kiero saber komo debuelvo") no
@@ -93,12 +144,8 @@ python -m scripts.eval_clasificador  # ver clasificación sobre el CSV de ejempl
 ## Estado / pendientes
 
 - [x] **Parte 1** — normalización + detección de casi-duplicados + clasificador por reglas
-- [ ] Parte 2 — integración del LLM local (llama-cpp) + fallback de clasificación
-- [ ] Parte 3 — RAG (indexado del documento en Qdrant + embeddings e5)
-- [ ] Parte 4 — endpoint `POST /consulta` completo + registro en SQLite + CORS
-
-> **Nota sobre el documento de referencia:** el enunciado pide indexar
-> `documentos_referencia.docx`, pero el archivo entregado es un PDF y en
-> `requirements.txt` solo está `python-docx` (sin lector de PDF). Para la Parte 3
-> hará falta el `.docx` (o añadir un extractor de PDF). Por ahora queda copiado
-> en `data/` como referencia.
+- [x] **Parte 2** — LLM local (llama-cpp, carga única) + fallback de clasificación
+      con salida JSON y manejo de errores; respuestas fijas de `dato_dinamico` y
+      `otra_area`; placeholders para `faq_estatica` (RAG) y `con_humano` (resumen)
+- [ ] Parte 3 — RAG (indexado del `.docx` en Qdrant + embeddings e5)
+- [ ] Parte 4 — endpoint `POST /consulta` + registro en SQLite + CORS + resumen `con_humano`

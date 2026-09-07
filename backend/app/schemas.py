@@ -23,8 +23,11 @@ class ConsultaResponse(BaseModel):
     confianza: float = Field(
         ..., ge=0.0, le=1.0, description="Score de confianza de la clasificación/respuesta."
     )
-    # Metadatos útiles para depurar; no forman parte del contrato mínimo.
+    # Metadatos útiles para depurar / panel del frontend; no son parte del
+    # contrato mínimo del enunciado.
     es_duplicado: bool = False
     metodo_clasificacion: str = Field(
-        "reglas", description="Cómo se clasificó: 'reglas' o 'llm'."
+        "regla",
+        description="Cómo se clasificó: 'regla', 'llm', 'llm_fallback_error' o 'duplicado'.",
     )
+    razon: str = Field("", description="Motivo de la clasificación (keywords o razón del LLM).")

@@ -74,3 +74,28 @@ DEDUP_TTL_SECONDS = int(os.getenv("DEDUP_TTL_SECONDS", "1800"))  # 30 min
 # Por debajo de esto no inventamos: la consulta cae a con_humano.
 RAG_SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.80"))
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+
+
+# --- Respuestas fijas -----------------------------------------------------
+
+# Placeholder hasta el Paso 3 (RAG).
+RESPUESTA_FAQ_PLACEHOLDER = "[pendiente: RAG en el Paso 3]"
+
+MENSAJE_DATO_DINAMICO = (
+    "Ese dato (precio, stock, promociones o tipo de cambio) se gestiona en el "
+    "sistema comercial y se actualiza de forma continua, por lo que no puedo "
+    "darte un valor confiable desde aquí. Consúltalo directamente en el sistema "
+    "comercial o con tu contacto del área comercial."
+)
+
+MENSAJE_OTRA_AREA = (
+    "Tu consulta corresponde a otra área (por ejemplo Recursos Humanos o TI) y "
+    "está fuera del alcance del asistente comercial. Por favor dirígela al área "
+    "correspondiente a través de los canales internos habituales."
+)
+
+# Placeholder hasta el Paso 4 (resumen con LLM + registro de pendiente).
+RESPUESTA_CON_HUMANO_PLACEHOLDER = (
+    "Tu consulta requiere la revisión de una persona del equipo comercial. "
+    "La hemos derivado para su atención. [pendiente: resumen y pendiente en el Paso 4]"
+)

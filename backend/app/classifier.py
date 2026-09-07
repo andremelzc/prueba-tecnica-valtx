@@ -1,13 +1,11 @@
-"""Clasificador de intención: reglas por keyword + (más adelante) fallback al LLM.
+"""Clasificador de intención: reglas por keyword + fallback al LLM local.
 
 `clasificar(texto, llm_fn=None)`:
   1. Aplica las reglas de `rules.py` sobre el texto normalizado sin acentos.
-  2. Si alguna categoría destaca con suficiente margen -> se devuelve (metodo="reglas").
-  3. Si no -> AMBIGUO. Si se pasa `llm_fn`, se delega en el LLM (metodo="llm");
-     si no, se devuelve AMBIGUO para que lo resuelva la capa superior.
-
-En esta primera entrega `llm_fn` todavía no existe: el fallback se integra en el
-siguiente paso.
+  2. Si alguna categoría destaca con suficiente margen -> se devuelve (metodo="regla").
+  3. Si no -> AMBIGUO. Si se pasa `llm_fn`, se delega en el LLM
+     (metodo="llm" o "llm_fallback_error"); si no, se devuelve AMBIGUO para que lo
+     resuelva la capa superior.
 """
 
 from __future__ import annotations
@@ -16,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, Union
 
 from .config import AMBIGUO, PRIORIDAD_CATEGORIAS, Categoria
+from .llm import LLMClasificacion
 from .normalization import normalizar_match
 from .rules import REGLAS
 
@@ -26,15 +25,16 @@ _MARGEN_MINIMO = 1.0
 # Tipo de retorno de la clasificación: una Categoria concreta o AMBIGUO.
 Intencion = Union[Categoria, str]
 
-# Firma del fallback: recibe el texto normalizado y devuelve una Categoria.
-LLMClassifier = Callable[[str], Categoria]
+# Firma del fallback: recibe el texto normalizado y devuelve una LLMClasificacion.
+LLMClassifier = Callable[[str], LLMClasificacion]
 
 
 @dataclass
 class ResultadoClasificacion:
     categoria: Intencion
-    metodo: str  # "reglas" | "llm" | "ambiguo"
+    metodo: str  # "regla" | "llm" | "llm_fallback_error" | "ambiguo"
     confianza: float
+    razon: str = ""
     puntajes: dict[str, float] = field(default_factory=dict)
     keywords: list[str] = field(default_factory=list)
 
@@ -86,8 +86,9 @@ def clasificar_por_reglas(texto_normalizado: str) -> ResultadoClasificacion:
 
     return ResultadoClasificacion(
         categoria=cat_top,
-        metodo="reglas",
+        metodo="regla",
         confianza=_confianza_desde_puntaje(punt_top, punt_2),
+        razon="keywords: " + ", ".join(matches[cat_top]),
         puntajes=puntajes_str,
         keywords=matches[cat_top],
     )
@@ -105,12 +106,15 @@ def clasificar(
     if llm_fn is None:
         return resultado  # queda AMBIGUO; lo resuelve la capa superior
 
-    categoria_llm = llm_fn(texto_normalizado)
+    salida: LLMClasificacion = llm_fn(texto_normalizado)
+    # metodo == "llm"           -> el LLM eligió una categoría válida
+    # metodo == "llm_fallback_error" -> no se pudo parsear; salida.categoria = con_humano
+    confianza = 0.60 if salida.metodo == "llm" else 0.30
     return ResultadoClasificacion(
-        categoria=categoria_llm,
-        metodo="llm",
-        # El LLM entra justo en los casos dudosos: confianza moderada por defecto.
-        confianza=max(resultado.confianza, 0.60),
+        categoria=salida.categoria,
+        metodo=salida.metodo,
+        confianza=confianza,
+        razon=salida.razon,
         puntajes=resultado.puntajes,
         keywords=resultado.keywords,
     )
