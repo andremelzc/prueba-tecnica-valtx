@@ -1,0 +1,26 @@
+.git
+**/.git
+
+# Python
+**/venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+
+# Node
+**/node_modules
+frontend/dist
+
+# Artefactos de runtime (se regeneran en el contenedor)
+backend/models
+backend/data/qdrant
+backend/data/*.db
+backend/storage
+
+# Config local — que el build de prod NO tome la URL de dev
+**/.env
+**/.env.local
+
+# No hace falta en runtime (usamos el .docx)
+backend/data/documentos_referencia.pdf

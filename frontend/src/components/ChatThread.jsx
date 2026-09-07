@@ -1,5 +1,9 @@
 import { useEffect, useRef } from "react";
 import Message from "./Message";
+// Scrollea SOLO el contenedor de mensajes, nunca la página.
+function scrollToEnd(el) {
+  if (el) el.scrollTop = el.scrollHeight;
+}
 
 function TypingIndicator() {
   return (
@@ -15,14 +19,14 @@ function TypingIndicator() {
 }
 
 export default function ChatThread({ messages, loading }) {
-  const endRef = useRef(null);
+  const threadRef = useRef(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollToEnd(threadRef.current);
   }, [messages, loading]);
 
   return (
-    <div className="thread">
+    <div className="thread" ref={threadRef}>
       {messages.length === 0 && !loading && (
         <div className="thread__empty">
           Escribe una consulta o elegí un ejemplo de la izquierda para ver cómo el
@@ -35,7 +39,6 @@ export default function ChatThread({ messages, loading }) {
       ))}
 
       {loading && <TypingIndicator />}
-      <div ref={endRef} />
     </div>
   );
 }

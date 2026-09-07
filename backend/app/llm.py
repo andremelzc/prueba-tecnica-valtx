@@ -101,7 +101,7 @@ _CATEGORIAS_VALIDAS = {c.value for c in Categoria}
 _GRAMMAR_GBNF = r'''
 root   ::= "{" ws "\"categoria\"" ws ":" ws cat ws "," ws "\"razon\"" ws ":" ws str ws "}"
 cat    ::= "\"faq_estatica\"" | "\"dato_dinamico\"" | "\"otra_area\"" | "\"con_humano\""
-str    ::= "\"" ([^"\\\n] | "\\" .){0,90} "\""
+str    ::= "\"" ([^"\\\n] | "\\" .){0,140} "\""
 ws     ::= [ \t\n]*
 '''
 
@@ -215,13 +215,25 @@ def clasificar_intencion_llm(texto_normalizado: str, llm: Any = None) -> LLMClas
 
     razon = ""
     if isinstance(data, dict) and isinstance(data.get("razon"), str):
-        razon = data["razon"].strip()[:200]
+        razon = _cerrar_frase(data["razon"].strip())
 
     return LLMClasificacion(
         categoria=Categoria(categoria.strip().lower()),
         razon=razon or "(sin razón)",
         metodo="llm",
     )
+
+
+# La gramática corta la razón a ~140 chars, a veces a mitad de palabra. Recortamos
+# por debajo de eso y soltamos la última palabra si el texto venía cortado.
+def _cerrar_frase(texto: str, limite: int = 130) -> str:
+    texto = texto.strip()
+    if len(texto) <= limite:
+        return texto
+    recorte = texto[:limite].rstrip()
+    if " " in recorte:
+        recorte = recorte[: recorte.rfind(" ")].rstrip()
+    return recorte.rstrip(".,;:") + "…"
 
 
 # --- Resumen para casos con_humano -----------------------------------

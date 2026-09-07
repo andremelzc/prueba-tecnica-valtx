@@ -12,9 +12,11 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app.config import LLM_MODEL_PATH
@@ -89,3 +91,11 @@ def consulta(req: ConsultaRequest) -> ConsultaResponse:
     # Cada llamada se registra, sea o no duplicado, sea cual sea la categoría.
     db.registrar_consulta(req, resp)
     return resp
+
+
+# Si hay un build del frontend junto al backend (Docker), lo sirve desde el mismo
+# origen. Se monta al final para no tapar /consulta, /health ni /docs.
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="frontend")
+    log.info("Sirviendo frontend desde %s", _STATIC_DIR)
