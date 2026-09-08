@@ -1,6 +1,6 @@
 """Configuración central: categorías, rutas y umbrales del pipeline.
 
-Todo se puede sobrescribir por variable de entorno para no tener que tocar código
+Todo se puede configurar por variable de entorno para no tener que tocar código
 al mover el proyecto a Docker más adelante.
 """
 
@@ -72,8 +72,8 @@ DEDUP_TTL_SECONDS = int(os.getenv("DEDUP_TTL_SECONDS", "1800"))  # 30 min
 
 # RAG: score mínimo de similitud (coseno, 0-1) para pasar el chunk al LLM.
 # e5-small comprime mucho los scores (todo cae ~0.81-0.93), así que este umbral
-# solo descarta lo claramente irrelevante; el filtro fino es la compuerta SI/NO
-# del LLM sobre el contexto recuperado (ver rag.py).
+# solo descarta lo claramente irrelevante; el filtro fino es la verificación
+# SI/NO del LLM sobre el contexto recuperado (ver rag.py).
 RAG_SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.84"))
 # 5 y no 3: algunas preguntas ("¿qué incluye el catálogo?") necesitan varias
 # filas de tabla en el contexto, y las filas puntúan por debajo del párrafo intro.

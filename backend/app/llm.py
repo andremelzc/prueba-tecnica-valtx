@@ -137,7 +137,7 @@ Clasifica la consulta del usuario en EXACTAMENTE UNA de estas 4 categorías:
   hablar con alguien".
 
 Si la consulta PIDE INFORMACIÓN sobre productos, servicios, condiciones de
-compra, pagos, envíos o soporte —aunque no sepas si está documentada— elige
+compra, pagos, envíos o soporte (aunque no sepas si está documentada) elige
 faq_estatica: un filtro posterior valida si la respuesta está en la documentación
 y, si no, la deriva. Reserva con_humano para quejas, reclamos, negociaciones o
 pedidos EXPLÍCITOS de excepción o de hablar con una persona.
@@ -233,7 +233,7 @@ def _cerrar_frase(texto: str, limite: int = 130) -> str:
     recorte = texto[:limite].rstrip()
     if " " in recorte:
         recorte = recorte[: recorte.rfind(" ")].rstrip()
-    return recorte.rstrip(".,;:") + "…"
+    return recorte.rstrip(".,;:") + "..."
 
 
 # --- Resumen para casos con_humano -----------------------------------

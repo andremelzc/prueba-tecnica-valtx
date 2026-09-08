@@ -101,7 +101,7 @@ def cargar_chunks(docx_path: str | Path) -> list[Chunk]:
             # Prefijo corto con la sección: ayuda a desambiguar ítems sueltos
             # ("Requisitos: ..." solo no dice de qué).
             chunks.append(
-                Chunk(seccion=seccion_actual, texto=f"{seccion_actual} — {txt}", tipo="prosa")
+                Chunk(seccion=seccion_actual, texto=f"{seccion_actual}: {txt}", tipo="prosa")
             )
         else:  # Table
             filas = [[c.text for c in row.cells] for row in bloque.rows]

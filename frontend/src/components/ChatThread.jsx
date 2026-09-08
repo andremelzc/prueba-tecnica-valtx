@@ -12,7 +12,7 @@ function TypingIndicator() {
         <span className="typing__dot" />
         <span className="typing__dot" />
         <span className="typing__dot" />
-        <span className="typing__label">escribiendo…</span>
+        <span className="typing__label">escribiendo...</span>
       </div>
     </div>
   );
@@ -29,7 +29,7 @@ export default function ChatThread({ messages, loading }) {
     <div className="thread" ref={threadRef}>
       {messages.length === 0 && !loading && (
         <div className="thread__empty">
-          Escribe una consulta o elegí un ejemplo de la izquierda para ver cómo el
+          Escribe una consulta o elige un ejemplo de la izquierda para ver cómo el
           asistente la clasifica y responde.
         </div>
       )}

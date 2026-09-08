@@ -24,7 +24,7 @@ export default function DetailPanel({ data }) {
       {open && (
         <div className="detail__body">
           <Row label="Fuente citada">
-            {data.fuente ? data.fuente : <em>— (no aplica)</em>}
+            {data.fuente ? data.fuente : <em>(no aplica)</em>}
           </Row>
           <Row label="Confianza">
             <span className="confbar">
@@ -35,10 +35,10 @@ export default function DetailPanel({ data }) {
             </span>
           </Row>
           <Row label="Método">
-            <code>{data.metodo_clasificacion}</code> — {metodoLabel(data.metodo_clasificacion)}
+            <code>{data.metodo_clasificacion}</code>: {metodoLabel(data.metodo_clasificacion)}
           </Row>
           <Row label="¿Duplicado?">
-            {data.es_duplicado ? "Sí — respuesta servida desde el cache" : "No"}
+            {data.es_duplicado ? "Sí (respuesta servida desde el cache)" : "No"}
           </Row>
           {data.razon && <Row label="Razón">{data.razon}</Row>}
           {data.resumen && <Row label="Resumen p/ revisor">{data.resumen}</Row>}

@@ -81,6 +81,6 @@ for texto, esperado in CASOS:
 
 print()
 if _fallos:
-    print(f"❌ {len(_fallos)} fallo(s)")
+    print(f"FALLA: {len(_fallos)} fallo(s)")
     sys.exit(1)
-print("✅ Todo verde")
+print("OK: todo verde")

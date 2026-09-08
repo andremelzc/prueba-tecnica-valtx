@@ -4,10 +4,10 @@
   de Qdrant ya tiene puntos, no reindexa.
 - `responder_faq(texto, llm)` -> para consultas clasificadas como faq_estatica:
     1. embedding de la consulta + top-3 en Qdrant
-    2. si el mejor score < umbral -> NO llama al LLM, cae a con_humano
+    2. si el mejor score < umbral -> NO llama al LLM, deriva a con_humano
        (`rag_baja_confianza`)
     3. si supera el umbral -> el LLM responde SOLO con los chunks y cita la
-       sección; si no puede fundamentarlo -> cae a con_humano (`rag_sin_fundamento`)
+       sección; si no puede fundamentarlo -> deriva a con_humano (`rag_sin_fundamento`)
 
 Embeddings: intfloat/multilingual-e5-small (requiere prefijos "query:"/"passage:").
 """
@@ -152,7 +152,7 @@ Reglas:
 - Termina citando la sección entre paréntesis, así: (Fuente: <sección>)\
 """
 
-# Compuerta previa: ¿el contexto alcanza para responder? Respuesta forzada SI/NO.
+# Verificación previa: ¿el contexto alcanza para responder? Respuesta forzada SI/NO.
 _SYSTEM_GATE = """\
 Decides si el CONTEXTO responde de forma directa y completa la PREGUNTA.
 
@@ -166,8 +166,8 @@ Responde únicamente con SI o NO.\
 _GATE_GBNF = 'root ::= "SI" | "NO"\n'
 _gate_grammar: Any = None
 
-# Backstop: frases típicas de Phi-3 cuando en realidad NO puede fundamentar
-# (no emite el marcador y la compuerta a veces lo deja pasar).
+# Respaldo por regex: frases típicas de Phi-3 cuando en realidad NO puede
+# fundamentar (no emite el marcador y la verificación a veces lo deja pasar).
 _NEG_RE = re.compile(
     "|".join([
         r"\bno\s+hay\s+(informaci|datos|detalles|nada)",
@@ -204,7 +204,7 @@ _LISTA_COLGANDO_RE = re.compile(r"(?:\n+\s*\d+[.)]\s*)+$")
 
 
 def _limpiar_respuesta(texto: str, limite: int = 400) -> str:
-    """Corta divagues del modelo: si intenta continuar el prompt, o si se pasa."""
+    """Corta divagaciones del modelo: si intenta continuar el prompt, o si se pasa."""
     texto = _CORTE_RE.split(texto, maxsplit=1)[0].strip()
     if len(texto) > limite:
         recorte = texto[:limite]
@@ -215,12 +215,12 @@ def _limpiar_respuesta(texto: str, limite: int = 400) -> str:
     return texto
 
 
-def _es_deflexion(texto: str) -> bool:
+def _sin_fundamento(texto: str) -> bool:
     """El LLM no fundamentó la respuesta (aunque no haya emitido el marcador)."""
     if _SIN_FUNDAMENTO in texto.upper() or len(texto) < 3:
         return True
     # Solo miramos la 1ª frase: si la respuesta abre con una negativa sobre el
-    # contexto, es una deflexión; si abre con la respuesta y aclara un matiz
+    # contexto, no está fundamentada; si abre con la respuesta y aclara un matiz
     # después ("...No se menciona garantía extendida"), la damos por válida.
     primera = _FRASE_RE.split(texto, maxsplit=1)[0]
     return bool(_NEG_RE.search(primera))
@@ -247,7 +247,7 @@ def responder_faq(texto_consulta: str, llm: Any) -> RespuestaRAG:
     hits = buscar(texto_consulta, k=RAG_TOP_K)
     mejor = hits[0].score if hits else 0.0
 
-    # 6. Umbral de confianza: por debajo, no se llama al LLM.
+    # Umbral de confianza: por debajo, no se llama al LLM.
     if not hits or mejor < RAG_SCORE_THRESHOLD:
         return RespuestaRAG(
             categoria=Categoria.CON_HUMANO,
@@ -263,8 +263,8 @@ def responder_faq(texto_consulta: str, llm: Any) -> RespuestaRAG:
 
     contexto = _construir_contexto(hits)
 
-    # 7a. Compuerta: ¿el contexto realmente permite responder? (el score de e5 es
-    #     poco discriminante, así que esto es el filtro fino).
+    # Verificación: ¿el contexto realmente permite responder? (el score de e5 es
+    # poco discriminante, así que esto es el filtro fino).
     if not _contexto_suficiente(llm, contexto, texto_consulta):
         return RespuestaRAG(
             categoria=Categoria.CON_HUMANO,
@@ -278,7 +278,7 @@ def responder_faq(texto_consulta: str, llm: Any) -> RespuestaRAG:
             hits=hits,
         )
 
-    # 7b. Generación fundamentada en los chunks recuperados.
+    # Generación fundamentada en los chunks recuperados.
     try:
         salida = chat_completion(
             llm,
@@ -300,7 +300,7 @@ def responder_faq(texto_consulta: str, llm: Any) -> RespuestaRAG:
             hits=hits,
         )
 
-    if _es_deflexion(texto):
+    if _sin_fundamento(texto):
         return RespuestaRAG(
             categoria=Categoria.CON_HUMANO,
             respuesta=(

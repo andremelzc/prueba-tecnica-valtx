@@ -107,7 +107,7 @@ def main(csv_path: Path) -> None:
 
     print(f"\n== Ejemplos de respuestas generadas por RAG ({len(ejemplos_rag)}) ==")
     for cid, texto, respuesta, fuente, conf in ejemplos_rag[:6]:
-        print(f"  {cid} (score {conf}) — {texto}")
+        print(f"  {cid} (score {conf}) - {texto}")
         print(f"     fuente citada: {fuente}")
         print(f"     respuesta: {respuesta}\n")
 

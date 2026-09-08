@@ -46,7 +46,7 @@ def _fake_llm_fn(_t):
     return LLMClasificacion(categoria=Categoria.CON_HUMANO, razon="vago", metodo="llm")
 
 
-def _fake_faq_deflect(_t):
+def _fake_faq_deriva(_t):
     return RespuestaRAG(
         categoria=Categoria.CON_HUMANO, respuesta="No está en el doc.", fuente=None,
         confianza=0.5, metodo="rag_baja_confianza", hits=[],
@@ -74,11 +74,11 @@ r = procesar_consulta("Tengo una queja sobre la atención", "chat",
 check(r.categoria == Categoria.CON_HUMANO and r.resumen and r.resumen.startswith("RESUMEN:"),
       "con_humano por regla -> lleva resumen del LLM")
 
-# faq que el RAG deflecta -> con_humano + resumen
+# faq que el RAG deriva -> con_humano + resumen
 r = procesar_consulta("¿hacen envíos a marte?", "chat",
-                      cache=cache, llm_fn=_fake_llm_fn, faq_fn=_fake_faq_deflect, resumen_fn=_fake_resumen)
+                      cache=cache, llm_fn=_fake_llm_fn, faq_fn=_fake_faq_deriva, resumen_fn=_fake_resumen)
 check(r.categoria == Categoria.CON_HUMANO and r.metodo_clasificacion == "rag_baja_confianza" and r.resumen,
-      "con_humano vía deflexión del RAG -> también lleva resumen")
+      "con_humano por derivación del RAG -> también lleva resumen")
 
 # faq respondida por RAG -> NO resumen, mantiene método de clasificación
 r = procesar_consulta("¿cuánto dura la garantía?", "chat",
@@ -136,6 +136,6 @@ with client:
 _TMP_DB.unlink(missing_ok=True)
 print()
 if _fallos:
-    print(f"❌ {len(_fallos)} fallo(s)")
+    print(f"FALLA: {len(_fallos)} fallo(s)")
     sys.exit(1)
-print("✅ Todo verde")
+print("OK: todo verde")

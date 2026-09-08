@@ -18,7 +18,7 @@ backend/data/qdrant
 backend/data/*.db
 backend/storage
 
-# Config local — que el build de prod NO tome la URL de dev
+# Config local: que el build de prod NO tome la URL de dev
 **/.env
 **/.env.local
 

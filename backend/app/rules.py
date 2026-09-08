@@ -149,8 +149,8 @@ REGLAS: dict[Categoria, list[Regla]] = {
         _r(r"\bque\s+necesito\s+para\s+(hacer\s+una\s+)?(devolucion|devolver)\b", 1.5),
         # Preguntas de INFORMACIÓN sobre producto/servicio/condiciones. Aunque el
         # dato no esté en el documento, entran por el RAG: el umbral de confianza
-        # (Paso 3) las deriva a con_humano "por el camino correcto" (similitud
-        # real), no porque el LLM adivine que son quejas.
+        # las deriva a con_humano "por el camino correcto" (similitud real), no
+        # porque el LLM adivine que son quejas.
         _r(r"\bpagar\s+en\s+cuotas\b", 1.3),
         _r(r"\ben\s+cuotas\b", 1.3),
         _r(r"\b(formas?|medios?|metodos?|opciones)\s+de\s+pago\b", 1.3),

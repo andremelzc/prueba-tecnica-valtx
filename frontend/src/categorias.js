@@ -11,9 +11,9 @@ export const CATEGORIAS = {
 export const METODOS = {
   regla: "Reglas por keyword",
   llm: "LLM (fallback de clasificación)",
-  llm_fallback_error: "LLM — respuesta no parseable, se escaló",
-  rag_baja_confianza: "RAG — similitud por debajo del umbral",
-  rag_sin_fundamento: "RAG — el documento no cubre la consulta",
+  llm_fallback_error: "LLM: respuesta no parseable, se escaló",
+  rag_baja_confianza: "RAG: similitud por debajo del umbral",
+  rag_sin_fundamento: "RAG: el documento no cubre la consulta",
   sin_llm_fallback: "Reglas ambiguas y LLM no disponible",
 };
 

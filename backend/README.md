@@ -1,4 +1,4 @@
-# Backend — Asistente de consultas comerciales
+# Backend: asistente de consultas comerciales
 
 Pipeline single-turn (sin memoria entre turnos) que recibe una consulta por
 `POST /consulta`, la clasifica en una de 4 intenciones y responde según la
@@ -8,28 +8,28 @@ categoría.
 
 ```
 texto, canal
-   │
-   ▼
-normalización  ──►  ¿casi-duplicado de una consulta reciente? (rapidfuzz)
-   │                    └─ sí → devuelve la respuesta cacheada (es_duplicado=true),
-   │                            sin reclasificar ni llamar al LLM
-   ▼
+  |
+  v
+normalización  ->  ¿casi-duplicado de una consulta reciente? (rapidfuzz)
+  |                   sí -> devuelve la respuesta cacheada (es_duplicado=true),
+  |                         sin reclasificar ni llamar al LLM
+  v
 clasificación de intención
-   ├─ reglas por keyword (casos obvios)
-   └─ fallback al LLM local (solo lo ambiguo)
-   │
-   ▼
+  - reglas por keyword (casos obvios)
+  - fallback al LLM local (solo lo ambiguo)
+  |
+  v
 según categoría
-   ├─ faq_estatica  → RAG sobre documentos_referencia (Qdrant + e5) → respuesta LLM citando fuente
-   │                  (si el score < umbral o el LLM no fundamenta → con_humano, no se inventa)
-   ├─ dato_dinamico → mensaje fijo: ese dato vive en el sistema comercial
-   ├─ otra_area     → mensaje fijo: derivación al área correspondiente
-   └─ con_humano    → mensaje fijo + resumen breve con el LLM para el revisor
-   │
-   ▼
+  - faq_estatica  -> RAG sobre documentos_referencia (Qdrant + e5) -> respuesta LLM citando fuente
+                     (si el score < umbral o el LLM no fundamenta -> con_humano, no se inventa)
+  - dato_dinamico -> mensaje fijo: ese dato vive en el sistema comercial
+  - otra_area     -> mensaje fijo: derivación al área correspondiente
+  - con_humano    -> mensaje fijo + resumen breve con el LLM para el revisor
+  |
+  v
 registro en SQLite (siempre, también duplicados)
-   │
-   ▼
+  |
+  v
 { categoria, respuesta, fuente, confianza, metodo_clasificacion, es_duplicado }
 ```
 
@@ -46,9 +46,9 @@ registro en SQLite (siempre, también duplicados)
 
 ```
 backend/
-├── main.py                 # app FastAPI: lifespan (LLM + índice + BD) · POST /consulta · /health
+├── main.py                 # app FastAPI: lifespan (LLM + índice + BD), POST /consulta, /health
 ├── app/
-│   ├── config.py           # categorías, rutas, umbrales, mensajes fijos (overridable por env)
+│   ├── config.py           # categorías, rutas, umbrales, mensajes fijos (configurable por env)
 │   ├── schemas.py          # modelos Pydantic de request/response
 │   ├── normalization.py    # normalizar / normalizar_match / RecentQueryCache (dedup)
 │   ├── rules.py            # reglas por keyword, una lista de patrones por categoría
@@ -56,7 +56,7 @@ backend/
 │   ├── llm.py              # carga del GGUF (singleton) + clasificación + resumen con_humano
 │   ├── indexing.py         # .docx -> chunks (párrafos + filas de tabla legibles)
 │   ├── rag.py              # embeddings e5 + Qdrant local + búsqueda + generación
-│   ├── pipeline.py         # orquestación: normalizar → dedup → clasificar → RAG/respuesta
+│   ├── pipeline.py         # orquestación: normalizar -> dedup -> clasificar -> RAG/respuesta
 │   └── db.py               # SQLite: una fila por consulta (también duplicados)
 ├── scripts/
 │   ├── descargar_modelo.py  # baja el GGUF a models/ (una vez)
@@ -115,12 +115,12 @@ uvicorn main:app --reload            # levanta la app (carga LLM + índice + BD 
 
 Cada llamada inserta una fila en `data/consultas.db` (tabla `consultas`:
 `id, timestamp, texto, canal, categoria, respuesta, fuente, confianza,
-metodo_clasificacion, es_duplicado, resumen`) — **también los duplicados**, que se
+metodo_clasificacion, es_duplicado, resumen`), **también los duplicados**, que se
 resuelven con la respuesta cacheada sin volver a tocar el LLM/RAG.
 
 ## Resultados sobre la muestra de 80 consultas (pipeline completo)
 
-`python -m scripts.eval_pipeline` — reglas + Phi-3-mini + RAG:
+`python -m scripts.eval_pipeline` (reglas + Phi-3-mini + RAG):
 
 | categoría final | n  |
 |-----------------|----|
@@ -145,26 +145,26 @@ resuelven con la respuesta cacheada sin volver a tocar el LLM/RAG.
 | `rag_baja_confianza` (score < umbral, sin llamar al LLM)  | 2  | certificaciones de calidad, confidencialidad de datos |
 | `rag_sin_fundamento` (RAG buscó, el doc no lo cubre)      | 4  | pagar en cuotas, soporte post-venta, envíos a provincia, SLA |
 
-- **Pasos 9-10 cumplidos:** las preguntas de info que el doc no cubre (cuotas,
-  soporte, envíos...) ya no las manda el LLM directo a `con_humano`; pasan por
-  `faq_estatica` → RAG y el filtro de confianza las deriva por similitud real.
+- Las preguntas de info que el doc no cubre (cuotas, soporte, envíos...) ya no
+  las manda el LLM directo a `con_humano`: pasan por `faq_estatica` -> RAG y el
+  filtro de confianza las deriva por similitud real.
 - **Phi-3-mini clasifica: 0 errores de parseo** gracias a la gramática GBNF.
-- Costo: clasificación ~5-7 s; cada `faq_estatica` hace 2 llamadas (compuerta +
-  generación) → ~60-90 s en CPU. Las 80 en ~13 min (con GPU o modelo más chico, <1 min).
+- Costo: clasificación ~5-7 s; cada `faq_estatica` hace 2 llamadas (verificación +
+  generación), ~60-90 s en CPU. Las 80 en ~13 min (con GPU o modelo más chico, <1 min).
 
 ### Ejemplos de respuestas RAG
 
-La fuente va en el campo `fuente`; además se anexa "(Fuente: …)" al texto (el
+La fuente va en el campo `fuente`; además se anexa "(Fuente: ...)" al texto (el
 propio Phi-3-mini no la añade de forma fiable, así que la ponemos nosotros).
 
-> **¿Cuál es el plazo para devolver un producto?**  · score 0.91 · fuente: *Política de devoluciones y garantías*
+> **¿Cuál es el plazo para devolver un producto?** (score 0.91, fuente: *Política de devoluciones y garantías*)
 > "El plazo para devolver un producto es de 15 días calendario desde la recepción del mismo."
 
-> **¿Puedo cancelar una solicitud ya enviada?**  · score 0.91 · fuente: *Preguntas frecuentes*
+> **¿Puedo cancelar una solicitud ya enviada?** (score 0.91, fuente: *Preguntas frecuentes*)
 > "Sí, puedes cancelar una solicitud ya enviada antes de que haya sido aprobada.
-> Para hacerlo, debes acceder al portal interno y proceder con los pasos necesarios…"
+> Para hacerlo, debes acceder al portal interno y proceder con los pasos necesarios..."
 
-> **¿El Producto Alfa viene con garantía extendida?**  · score 0.86 · fuente: *Catálogo de productos*
+> **¿El Producto Alfa viene con garantía extendida?** (score 0.86, fuente: *Catálogo de productos*)
 > "No, el Producto Alfa (COD-ALF) no viene con garantía extendida. La garantía
 > estándar es de 12 meses y cubre defectos de fábrica durante ese período."
 
@@ -204,22 +204,22 @@ pasos numerados (contenido correcto, formato no ideal), y algún caso límite de
   a frase legible) + un chunk-resumen por tabla. El resumen es necesario para
   preguntas que necesitan todas las filas juntas ("¿qué incluye el catálogo?").
 - **e5-small comprime los scores de similitud** a un rango muy estrecho
-  (~0.81–0.93 para todo), así que un único umbral no separa bien "está en el doc"
+  (~0.81-0.93 para todo), así que un único umbral no separa bien "está en el doc"
   de "no está". Filtro en **dos etapas**: (1) umbral de score (descarta lo
-  claramente irrelevante) y (2) **compuerta SÍ/NO del LLM** sobre el contexto
-  recuperado (con gramática), + un backstop por regex sobre la 1ª frase de la
-  respuesta ("no se menciona en el contexto..."). Mejora natural: e5-base/large o
-  un reranker cross-encoder.
-- **Grounding:** el prompt de generación pide responder solo con el contexto; si
-  el LLM no puede, cae a `con_humano` (`rag_sin_fundamento`). Con score bajo ni
+  claramente irrelevante) y (2) **verificación SÍ/NO del LLM** sobre el contexto
+  recuperado (con gramática), más una regla de respaldo por regex sobre la 1ª
+  frase de la respuesta ("no se menciona en el contexto..."). Mejora natural:
+  e5-base/large o un reranker cross-encoder.
+- **Fundamentación:** el prompt de generación pide responder solo con el contexto;
+  si el LLM no puede, cae a `con_humano` (`rag_sin_fundamento`). Con score bajo ni
   siquiera se llama al LLM (`rag_baja_confianza`).
-- **Ajuste al clasificador (pasos 9-10):** las preguntas de *información* sobre
-  producto/servicio/condiciones (cuotas, soporte, envíos, certificaciones) ahora
-  van a `faq_estatica` → RAG, y el filtro de confianza las deriva a `con_humano`
-  "por el camino correcto" (similitud real, no adivinanza del LLM). Las quejas /
-  excepciones / negociaciones siguen yendo directo a `con_humano` (keywords fuertes).
+- **Ajuste al clasificador:** las preguntas de *información* sobre
+  producto/servicio/condiciones (cuotas, soporte, envíos, certificaciones) van a
+  `faq_estatica` -> RAG, y el filtro de confianza las deriva a `con_humano`
+  "por el camino correcto" (similitud real, no adivinanza del LLM). Las quejas,
+  excepciones y negociaciones siguen yendo directo a `con_humano` (keywords fuertes).
 
-### Deliberadamente NO construido
+### Fuera de alcance (a propósito)
 
 - **Corrección ortográfica dedicada.** Los typos ("kiero saber komo debuelvo") no
   matchean reglas y caen al LLM del fallback, que los tolera. Hacer fuzzy-match de
@@ -228,15 +228,15 @@ pasos numerados (contenido correcto, formato no ideal), y algún caso límite de
 - **Reranker / embedding grande.** Con e5-small + Phi-3-mini el filtro de 2 etapas
   alcanza para la demo; un cross-encoder o e5-large afinaría la precisión del RAG.
 
-## Estado / pendientes
+## Partes de la prueba
 
-- [x] **Parte 1** — normalización + detección de casi-duplicados + clasificador por reglas
-- [x] **Parte 2** — LLM local (llama-cpp, carga única) + fallback de clasificación
+- [x] **Parte 1:** normalización + detección de casi-duplicados + clasificador por reglas
+- [x] **Parte 2:** LLM local (llama-cpp, carga única) + fallback de clasificación
       con salida JSON y manejo de errores; respuestas fijas de `dato_dinamico` y
       `otra_area`; placeholders para `faq_estatica` (RAG) y `con_humano` (resumen)
-- [x] **Parte 3** — RAG: indexado del `.docx` en Qdrant local + embeddings e5;
+- [x] **Parte 3:** RAG: indexado del `.docx` en Qdrant local + embeddings e5;
       búsqueda top-5 + filtro de confianza en 2 etapas; generación fundamentada
-      con cita de fuente; ajuste del clasificador (info → RAG, quejas → humano)
-- [x] **Parte 4** — `POST /consulta` (solo orquesta `pipeline.procesar_consulta`),
+      con cita de fuente; ajuste del clasificador (info -> RAG, quejas -> humano)
+- [x] **Parte 4:** `POST /consulta` (solo orquesta `pipeline.procesar_consulta`),
       CORS abierto, resumen `con_humano` con el LLM, y `app/db.py`: cada llamada
       inserta una fila en SQLite (también los duplicados, sin recomputar)

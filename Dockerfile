@@ -1,4 +1,4 @@
-# Imagen única: buildea el frontend, lo mete dentro del backend y FastAPI lo sirve.
+# Imagen única: compila el frontend, lo mete dentro del backend y FastAPI lo sirve.
 # Pensada para Hugging Face Spaces (SDK: docker, app_port: 7860).
 
 # ---------- 1. Frontend (Vite build estático) ----------
@@ -35,13 +35,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./
 
-# Se bakean los modelos en la imagen para que el contenedor arranque sin descargas:
+# Los modelos se empaquetan en la imagen para que el contenedor arranque sin descargas:
 #  - GGUF del LLM (~2.4 GB)
 RUN python -m scripts.descargar_modelo
 #  - embeddings e5-small (~120 MB) a la caché de HF
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
 
-# Frontend build servido por FastAPI en el mismo origen.
+# El build del frontend lo sirve FastAPI en el mismo origen.
 COPY --from=frontend /fe/dist ./static
 
 # HF Spaces espera un usuario con UID 1000 y $HOME escribible.

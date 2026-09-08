@@ -7,7 +7,7 @@ import { consultar } from "./api";
 let nextId = 1;
 const uid = () => nextId++;
 
-// Pequeña espera para que el indicador "escribiendo…" también se vea con los
+// Pequeña espera para que el indicador "escribiendo..." también se vea con los
 // ejemplos cacheados (si no, aparecería la respuesta de golpe).
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 

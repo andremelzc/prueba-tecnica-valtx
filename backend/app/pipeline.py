@@ -44,15 +44,15 @@ def procesar_consulta(
 ) -> ConsultaResponse:
     texto_norm = normalizar(texto)
 
-    # 1. ¿Casi-duplicado de una consulta reciente? -> respuesta cacheada, sin
-    #    volver a clasificar ni llamar al LLM/RAG.
+    # ¿Casi-duplicado de una consulta reciente? -> respuesta cacheada, sin volver
+    # a clasificar ni llamar al LLM/RAG.
     dup = cache.buscar_duplicado(texto_norm)
     if dup is not None and dup.payload is not None:
         cacheada = ConsultaResponse(**dup.payload)
         cacheada.es_duplicado = True
         return cacheada
 
-    # 2. Clasificar: reglas y, si es ambiguo, fallback al LLM.
+    # Clasificar: reglas y, si es ambiguo, fallback al LLM.
     clf = clasificar(texto_norm, llm_fn=llm_fn)
     metodo, confianza, razon = clf.metodo, clf.confianza, clf.razon
     if clf.categoria == AMBIGUO:
@@ -63,15 +63,15 @@ def procesar_consulta(
     else:
         categoria = clf.categoria
 
-    # 3. Rama según categoría.
+    # Rama según categoría.
     resp = _responder(categoria, texto_norm, metodo, confianza, razon, faq_fn)
 
-    # 4. Para cualquier con_humano (regla directa, ambiguo, o deflexión del RAG):
-    #    resumen breve para quien lo revise.
+    # Para cualquier con_humano (regla directa, ambiguo, o derivación desde el
+    # RAG): resumen breve para quien lo revise.
     if resp.categoria == Categoria.CON_HUMANO and resumen_fn is not None:
         resp.resumen = resumen_fn(texto_norm)
 
-    # 5. Guardar en el cache para deduplicar próximas consultas (con su resumen).
+    # Guardar en el cache para deduplicar próximas consultas (con su resumen).
     cache.registrar(texto_norm, payload=resp.model_dump())
     return resp
 
@@ -94,12 +94,12 @@ def _responder(
         if rag.categoria == Categoria.FAQ_ESTATICA:
             # La clasificación (regla/llm) se mantiene; el RAG solo generó la
             # respuesta. Los rag_* aparecen únicamente cuando el RAG cambia la
-            # categoría (deflexión a con_humano).
+            # categoría (derivación a con_humano).
             return ConsultaResponse(
                 categoria=Categoria.FAQ_ESTATICA, respuesta=rag.respuesta, fuente=rag.fuente,
                 confianza=rag.confianza, metodo_clasificacion=metodo, razon=razon,
             )
-        # el RAG deflectó a con_humano (baja confianza / sin fundamento)
+        # el RAG derivó a con_humano (baja confianza / sin fundamento)
         return ConsultaResponse(
             categoria=Categoria.CON_HUMANO, respuesta=MENSAJE_CON_HUMANO, fuente=None,
             confianza=rag.confianza, metodo_clasificacion=rag.metodo,

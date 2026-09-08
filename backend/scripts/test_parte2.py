@@ -1,8 +1,8 @@
 """Pruebas de la Parte 2 (fallback de clasificación al LLM), con un LLM falso.
 
 No necesita el modelo GGUF: inyecta un objeto que imita `create_chat_completion`
-para verificar el parseo y, sobre todo, el manejo de errores (categoría
-alucinada / JSON inválido -> con_humano + llm_fallback_error).
+para verificar el parseo y, sobre todo, el manejo de errores (categoría inválida
+o inventada / JSON malformado -> con_humano + llm_fallback_error).
 
     python -m scripts.test_parte2
 """
@@ -79,6 +79,6 @@ check(res.categoria == Categoria.DATO_DINAMICO and res.metodo == "regla",
 
 print()
 if _fallos:
-    print(f"❌ {len(_fallos)} fallo(s)")
+    print(f"FALLA: {len(_fallos)} fallo(s)")
     sys.exit(1)
-print("✅ Todo verde")
+print("OK: todo verde")

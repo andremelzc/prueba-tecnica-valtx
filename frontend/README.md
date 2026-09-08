@@ -1,4 +1,4 @@
-# Frontend — Asistente de consultas comerciales
+# Frontend: asistente de consultas comerciales
 
 Vite + React. Una sola pantalla: barra lateral con ejemplos + chat single-turn
 contra el backend.
@@ -16,7 +16,7 @@ El backend tiene que estar corriendo (`uvicorn main:app` en `backend/`).
 ## Cómo funciona
 
 - **Barra lateral "Ejemplos":** 5 consultas reales del CSV (una por categoría +
-  un caso `con_humano` vía RAG). Al hacer clic **no llaman al backend** — usan
+  un caso `con_humano` vía RAG). Al hacer clic **no llaman al backend**: usan
   respuestas precomputadas de `src/ejemplos.data.json`, para que la demo no
   dependa de la latencia del LLM local. Se regeneran con:
 
@@ -40,13 +40,13 @@ El backend tiene que estar corriendo (`uvicorn main:app` en `backend/`).
 
 - **Caja de texto:** cada envío llama a `POST /consulta` en vivo (single-turn, no
   se manda historial). Una consulta `faq_estatica` puede tardar varios segundos
-  (LLM local en CPU) → el indicador "escribiendo…" es honesto.
+  (LLM local en CPU), por eso el indicador "escribiendo..." es honesto.
 
 - **Badge de categoría** debajo de cada respuesta: teal `faq_estatica`, ámbar
   `dato_dinamico`, gris `otra_area`, coral `con_humano`.
 
 - **"Ver detalle"** (colapsado): fuente citada, score de confianza, método de
-  clasificación (`regla` / `llm` / `rag_baja_confianza` / `rag_sin_fundamento` …),
+  clasificación (`regla`, `llm`, `rag_baja_confianza`, `rag_sin_fundamento`, etc.),
   si fue duplicado, y el resumen para el revisor (en `con_humano`).
 
 - **Errores:** si el backend no responde (caído / CORS), aparece una burbuja de
@@ -60,5 +60,5 @@ El backend tiene que estar corriendo (`uvicorn main:app` en `backend/`).
 
 ## Paleta
 
-Fondo gris muy claro · barra lateral azul marino `#0B1F4D` · acento celeste
+Fondo gris muy claro, barra lateral azul marino `#0B1F4D`, acento celeste
 `#29ABE2` (botón enviar). Los 4 colores de badge son independientes de la marca.
