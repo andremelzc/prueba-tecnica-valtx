@@ -13,6 +13,9 @@ data/*.db
 data/qdrant/
 storage/
 
+# Build del frontend copiado acá para servirlo desde FastAPI (se regenera)
+static/
+
 # Modelos locales (GGUF, pesos) — se descargan aparte
 models/
 *.gguf

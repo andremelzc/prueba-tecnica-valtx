@@ -83,37 +83,74 @@ eso **rompe el requisito de "modelo self-hosted / on-premise"**.
 
 ---
 
-## 3. Opción recomendada: tu máquina + Cloudflare Tunnel
+## 3. Exponerlo en vivo — tu máquina como backend (recomendado)
 
-Es lo más literalmente *on-premise* (corre en tu hardware), gratis, sin tarjeta,
-y funciona en ~10 minutos.
+Es lo más literalmente *on-premise* (corre en tu hardware), gratis y sin tarjeta.
+El **catch**: tu máquina prendida, enchufada, con suspensión desactivada, y los
+procesos corriendo mientras dure la revisión.
+
+**No hace falta hostear el frontend en ningún lado.** El frontend se buildea
+*dentro* del backend y FastAPI lo sirve → **una sola URL** (la del túnel) para
+todo. `npm run build` ya produce un build de "mismo origen" (ver
+`frontend/.env.production`).
+
+### Preparar una sola vez
+
+1. Cuenta en **ngrok.com** (gratis, sin tarjeta) → `ngrok config add-authtoken <token>`.
+2. Dashboard → **Domains** → reclamar el **dominio estático gratis**
+   (`tu-nombre.ngrok-free.app`). Es fijo, sobrevive reinicios.
+3. Meter el frontend dentro del backend (FastAPI sirve `backend/static/` si existe
+   **al arrancar** — hacelo antes de levantar uvicorn):
+   ```bash
+   cd frontend && npm run build
+   #   Windows PowerShell:
+   Copy-Item -Recurse -Force dist ../backend/static
+   #   macOS/Linux:
+   #   rm -rf ../backend/static && cp -r dist ../backend/static
+   ```
+   Verificado: `GET /` sirve la app, `POST /consulta` y `/docs` siguen funcionando
+   en la misma URL.
+
+### El día de la demo
+
+**Si presentás vos compartiendo pantalla** — no hace falta túnel, todo local:
 
 ```bash
-# 1. instalar cloudflared
-winget install --id Cloudflare.cloudflared          # Windows
-#   o: brew install cloudflared                     # macOS
-#   o: https://github.com/cloudflare/cloudflared/releases
+cd backend && uvicorn main:app        # :8000  (sirve API + frontend)
+```
+Abrís **http://localhost:8000**.
 
-# 2. levantar el backend local (como siempre)
-cd backend && uvicorn main:app                       # :8000
+**Si tienen que entrar ellos a un link:**
 
-# 3. túnel público (en otra terminal)
+```bash
+# terminal 1
+cd backend && uvicorn main:app                        # :8000
+
+# terminal 2
+ngrok http --url=tu-nombre.ngrok-free.app 8000
+```
+
+Pasás **`https://tu-nombre.ngrok-free.app`** — sirve toda la app. El evaluador ve
+una vez la pantalla "Visit Site" de ngrok al abrir el link (las llamadas de API
+ya la saltan por el header `ngrok-skip-browser-warning` del `api.js`); un clic y
+adentro.
+
+> **Para evitar hasta ese clic**: deployás el frontend aparte en Cloudflare Pages
+> / Netlify (`VITE_API_URL=https://tu-nombre.ngrok-free.app npm run build`, subís
+> `dist/`) y pasás la URL de Pages en vez de la de ngrok. Opcional — es solo para
+> sacarte de encima el interstitial.
+
+### Alternativa sin cuenta: Cloudflare quick tunnel
+
+```bash
 cloudflared tunnel --url http://localhost:8000
 ```
 
-Devuelve una URL `https://<random>.trycloudflare.com`. **Sin cuenta, sin config.**
-Vive mientras el proceso `cloudflared` esté corriendo.
+Da `https://<random>.trycloudflare.com` sin registro, pero la **URL cambia cada
+vez que reiniciás** el proceso — no sirve para mandar un link que dure días.
 
-- El frontend se buildea y se deja en **Cloudflare Pages / Netlify / HF Static
-  Space** (gratis), con `VITE_API_URL` apuntando a esa URL.
-- **Contras:** la máquina tiene que estar prendida y con los dos procesos
-  corriendo. La URL cambia al reiniciar el túnel (para URL fija gratis hace falta
-  un dominio en Cloudflare). Alternativa casi igual: **ngrok free** da un
-  subdominio `*.ngrok-free.app` fijo por cuenta (registro sin tarjeta).
-
-Para una demo en vivo o una ventana de revisión de pocos días: dejás la laptop
-enchufada, suspensión desactivada, y mandás la URL. Conviene además grabar un
-**video corto** mostrándolo andando, por si miran el link con el túnel caído.
+> En todos los casos: grabá también un **video corto** mostrándolo andando, como
+> respaldo por si miran el link con la máquina apagada.
 
 ---
 

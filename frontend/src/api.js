@@ -10,7 +10,12 @@ export async function consultar({ texto, canal }) {
   try {
     res = await fetch(`${API_URL}/consulta`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Si el backend se expone por ngrok, evita la pantalla intermedia en
+        // las llamadas de API. Inofensivo en cualquier otro caso.
+        "ngrok-skip-browser-warning": "true",
+      },
       body: JSON.stringify({ texto, canal }),
     });
   } catch {
