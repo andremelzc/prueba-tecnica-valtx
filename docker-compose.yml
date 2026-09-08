@@ -1,0 +1,19 @@
+# Backend + frontend en un solo contenedor (ver Dockerfile).
+#   docker compose up --build
+# Primera vez: ~15-20 min (compila llama-cpp, baja el modelo, buildea el front).
+# Luego: http://localhost:8000
+
+services:
+  asistente:
+    build: .
+    ports:
+      - "8000:7860"
+    environment:
+      # threads del LLM; subir si la máquina tiene más cores
+      LLM_N_THREADS: "4"
+    restart: unless-stopped
+    # El modelo GGUF y los embeddings van bakeados en la imagen: no hacen falta
+    # volúmenes para que arranque. El índice de Qdrant y el log de SQLite son
+    # efímeros (se regeneran). Para persistir el log entre `down`/`up`:
+    # volumes:
+    #   - ./backend/data:/app/data
